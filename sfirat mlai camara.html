@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ספירת מלאי</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f2f2f7; direction: rtl; }
+.app { max-width: 480px; margin: 0 auto; padding: 16px; }
+.screen { display: none; }
+.screen.active { display: block; }
+.card { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; }
+h1 { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 4px; }
+h2 { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 4px; }
+.sub { font-size: 13px; color: #888; margin-bottom: 12px; }
+label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; margin-top: 10px; }
+input[type=text], input[type=number] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-family: Arial,sans-serif; margin-bottom: 4px; background: #fafafa; }
+input:focus { outline: none; border-color: #333; background: #fff; }
+button.primary { width: 100%; background: #111; color: #fff; border: none; border-radius: 8px; padding: 12px 16px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+button.primary:hover { background: #333; }
+button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f5c6c6; border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; margin-top: 8px; }
+.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+.badge-kg { background: #d1f0e0; color: #0a6640; }
+.badge-unit { background: #dbeafe; color: #1e40af; }
+.back-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #555; padding: 0; line-height: 1; }
+.action-btn { font-size: 13px; background: none; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.action-btn:hover { background: #f5f5f5; }
+.top-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.top-bar h1, .top-bar h2 { flex: 1; margin-bottom: 0; }
+.search-wrap { position: relative; margin-bottom: 10px; }
+.search-wrap input { padding-right: 36px; margin-bottom: 0; }
+.search-icon { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: #aaa; }
+#items-list { max-height: 380px; overflow-y: auto; }
+.item-row { padding: 10px 8px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 6px; }
+.item-row:last-child { border-bottom: none; }
+.item-row:hover { background: #f5f5f5; }
+.item-name { font-size: 14px; font-weight: 600; color: #111; }
+.item-sku { font-size: 12px; color: #888; margin-top: 2px; }
+.count-entry { background: #f5f5f5; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.qty-row { display: flex; align-items: center; gap: 10px; }
+.qty-row input { width: 120px; font-size: 20px; text-align: center; }
+.qty-unit { font-size: 15px; color: #555; }
+.history-entry { padding: 11px 0; border-bottom: 1px solid #f0f0f0; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.history-entry:last-child { border-bottom: none; }
+.history-entry.checked-row { background: #f6fff8; border-radius: 8px; padding: 11px 8px; margin: 0 -8px; }
+.history-main { flex: 1; min-width: 0; }
+.history-name { font-size: 14px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-sku { font-size: 12px; color: #aaa; margin-top: 1px; }
+.history-qty { font-size: 16px; font-weight: 700; color: #111; white-space: nowrap; }
+.history-meta { font-size: 11px; color: #aaa; margin-top: 2px; }
+.history-note { font-size: 12px; color: #888; margin-top: 3px; font-style: italic; }
+.row-actions { display: flex; gap: 5px; flex-shrink: 0; margin-top: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.btn-edit { background: none; border: 1px solid #b0c4de; color: #1a5276; border-radius: 8px; font-size: 12px; cursor: pointer; padding: 5px 9px; }
+.btn-edit:hover { background: #eaf4fb; }
+.del-btn { background: none; border: 1px solid #f5c6c6; color: #c00; border-radius: 8px; font-size: 12px; cursor: pointer; padding: 5px 9px; }
+.del-btn:hover { background: #fff0f0; }
+/* מודל */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 900; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-box { background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 360px; direction: rtl; }
+.modal-box h2 { font-size: 17px; margin-bottom: 4px; }
+/* סורק ברקוד */
+.scan-btn { width: 100%; background: #0a6640; color: #fff; border: none; border-radius: 8px; padding: 11px 16px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.scan-btn:hover { background: #0e7d4f; }
+.scanner-overlay { position: fixed; inset: 0; background: #000; z-index: 950; display: flex; flex-direction: column; }
+.scanner-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #111; color: #fff; }
+.scanner-header h2 { color: #fff; font-size: 16px; margin: 0; }
+.scanner-close { background: none; border: none; color: #fff; font-size: 26px; cursor: pointer; line-height: 1; padding: 0 6px; }
+#qr-reader-wrap { flex: 1; position: relative; background: #000; }
+#qr-reader { width: 100%; height: 100%; }
+.scanner-footer { padding: 14px 16px; background: #111; text-align: center; }
+.scanner-hint { color: #ddd; font-size: 13px; margin-bottom: 8px; }
+.scanner-manual-btn { background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; padding: 9px 18px; font-size: 13px; cursor: pointer; }
+.scan-error-box { background: #fff0f0; border: 1px solid #f5c6c6; border-radius: 10px; padding: 14px; margin: 12px 16px; text-align: center; }
+.scan-error-box .title { color: #c00; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.scan-error-box .detail { color: #888; font-size: 13px; }
+.scan-success-flash { position: absolute; inset: 0; background: rgba(46,125,50,0.35); display: none; align-items: center; justify-content: center; }
+.scan-success-flash.show { display: flex; }
+.scan-success-flash .icon { font-size: 60px; }
+.modal-sub { font-size: 13px; color: #888; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; }
+.modal-actions button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+.modal-confirm { background: #111; color: #fff; }
+.modal-cancel { background: #f0f0f0; color: #333; }
+/* כרטיסי מחסנים */
+.warehouse-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.warehouse-card { background: #fff; border: 1.5px solid #e0e0e0; border-radius: 14px; padding: 16px 18px; cursor: pointer; display: flex; align-items: center; gap: 14px; transition: border-color 0.15s, box-shadow 0.15s; position: relative; }
+.warehouse-card:hover { border-color: #999; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.warehouse-card.active-wh { border-color: #111; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.wh-icon { font-size: 28px; flex-shrink: 0; }
+.wh-info { flex: 1; min-width: 0; }
+.wh-name { font-size: 16px; font-weight: 700; color: #111; }
+.wh-meta { font-size: 12px; color: #888; margin-top: 3px; }
+.wh-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.wh-badge-active { background: #111; color: #fff; }
+.wh-badge-idle { background: #f0f0f0; color: #555; }
+.wh-del { position: absolute; top: 10px; left: 12px; background: none; border: none; color: #ccc; font-size: 18px; cursor: pointer; padding: 4px; line-height: 1; }
+.wh-del:hover { color: #c00; }
+.add-wh-btn { width: 100%; border: 2px dashed #ccc; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 600; color: #555; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.add-wh-btn:hover { border-color: #888; background: #fafafa; }
+/* תפריט מחסן */
+.menu-btn { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 14px 16px; cursor: pointer; text-align: right; width: 100%; margin-bottom: 10px; }
+.menu-btn:hover { background: #f9f9f9; }
+.menu-btn-icon { font-size: 24px; flex-shrink: 0; }
+.menu-btn-label { font-size: 15px; font-weight: 700; color: #111; }
+.menu-btn-desc { font-size: 12px; color: #888; margin-top: 2px; }
+/* בדיקה */
+.review-item-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.review-item-header { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.review-item-header:hover { background: #fafafa; }
+.review-item-title { font-weight: 700; font-size: 15px; color: #111; }
+.review-item-meta { font-size: 12px; color: #888; margin-top: 2px; }
+.review-item-body { border-top: 1px solid #f0f0f0; padding: 0 16px; display: none; }
+.review-item-body.open { display: block; }
+.review-entry-row { padding: 10px 0; border-bottom: 1px solid #f5f5f5; display: flex; align-items: center; gap: 10px; }
+.review-entry-row:last-child { border-bottom: none; }
+.review-entry-row.is-checked { background: #f6fff8; border-radius: 8px; padding: 10px 8px; margin: 0 -8px; }
+.review-checkbox { width: 20px; height: 20px; cursor: pointer; flex-shrink: 0; accent-color: #2e7d32; }
+.review-entry-info { flex: 1; min-width: 0; }
+.review-entry-qty { font-size: 15px; font-weight: 700; color: #111; }
+.review-entry-detail { font-size: 12px; color: #888; margin-top: 2px; }
+.review-progress { height: 6px; background: #e0e0e0; border-radius: 99px; }
+.review-progress-bar { height: 100%; background: #4caf50; border-radius: 99px; transition: width 0.3s; }
+.review-stats { display: flex; gap: 8px; margin-bottom: 14px; }
+.review-stat { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; text-align: center; }
+.review-stat-val { font-size: 20px; font-weight: 700; }
+.review-stat-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+.checked-badge { font-size: 11px; background: #d1f0e0; color: #0a6640; border-radius: 99px; padding: 2px 7px; font-weight: 600; }
+.chevron-icon { font-size: 16px; color: #bbb; transition: transform 0.2s; }
+.chevron-icon.open { transform: rotate(90deg); }
+.summary-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.summary-row:last-child { border-bottom: none; }
+.summary-total { font-weight: 700; font-size: 15px; }
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat { background: #f5f5f5; border-radius: 10px; padding: 12px 8px; text-align: center; }
+.stat-val { font-size: 22px; font-weight: 700; color: #111; }
+.stat-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+.no-items { text-align: center; color: #aaa; font-size: 14px; padding: 28px 0; }
+.file-drop { border: 2px dashed #ccc; border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; margin-bottom: 8px; }
+.file-drop:hover { border-color: #888; }
+.file-drop input { display: none; }
+.demo-btn { background: none; border: none; color: #888; font-size: 12px; cursor: pointer; text-decoration: underline; display: block; margin: 0 auto 8px; }
+.error-msg { color: #c00; font-size: 13px; margin: 6px 0; }
+.success-msg { color: #0a6640; font-size: 13px; background: #d1f0e0; border-radius: 8px; padding: 10px 14px; margin-top: 10px; }
+.save-indicator { font-size: 12px; color: #aaa; }
+.save-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4caf50; margin-left: 4px; vertical-align: middle; }
+.empty-history { text-align: center; padding: 28px 0; color: #aaa; font-size: 14px; }
+.empty-history .big { font-size: 32px; margin-bottom: 8px; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; border-radius: 10px; padding: 10px 22px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+/* כרטיס מחסן בסיכום כולל */
+.all-wh-section { margin-bottom: 18px; }
+.all-wh-section-title { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<!-- מודל עריכה -->
+<div class="modal-overlay" id="edit-modal" style="display:none" onclick="closeEditModal(event)">
+  <div class="modal-box">
+    <h2>עריכת ספירה</h2>
+    <p class="modal-sub" id="edit-modal-sub"></p>
+    <label>כמות</label>
+    <div class="qty-row" style="margin-bottom:10px">
+      <input type="number" id="edit-qty" min="0" step="0.001" style="width:120px;font-size:20px;text-align:center;margin-bottom:0"/>
+      <span id="edit-unit-label" style="font-size:15px;color:#555"></span>
+    </div>
+    <div id="edit-batch-wrap" style="display:none">
+      <label>מספר אצווה <span style="color:#c00">*</span></label>
+      <input type="text" id="edit-batch" placeholder="1 עד 8 ספרות" inputmode="numeric" maxlength="8"/>
+      <div class="error-msg" id="edit-batch-error" style="display:none"></div>
+    </div>
+    <label>הערה / מיקום</label>
+    <input type="text" id="edit-note" placeholder="למשל: מדף 3" style="margin-bottom:0"/>
+    <div class="modal-actions">
+      <button class="modal-confirm" onclick="confirmEdit()">שמור</button>
+      <button class="modal-cancel" onclick="closeEditModal()">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- מודל הוספת מחסן -->
+<div class="modal-overlay" id="new-wh-modal" style="display:none" onclick="closeNewWhModal(event)">
+  <div class="modal-box">
+    <h2>פתח מחסן</h2>
+    <p class="modal-sub" id="new-wh-modal-sub">בחר מחסן להתחלת ספירה</p>
+    <label>מחסן</label>
+    <select id="new-wh-select" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-family:Arial,sans-serif;margin-bottom:8px;background:#fafafa">
+      <option value="">— בחר מחסן —</option>
+    </select>
+    <div class="error-msg" id="new-wh-error" style="display:none"></div>
+    <label>שם הסופר (אופציונלי)</label>
+    <input type="text" id="new-wh-counter" placeholder="שמך" style="margin-bottom:0"/>
+    <div class="modal-actions">
+      <button class="modal-confirm" onclick="confirmNewWarehouse()">פתח מחסן</button>
+      <button class="modal-cancel" onclick="closeNewWhModal()">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- סורק ברקוד -->
+<div class="scanner-overlay" id="scanner-overlay" style="display:none">
+  <div class="scanner-header">
+    <h2 id="scanner-title">📷 סריקת ברקוד</h2>
+    <button class="scanner-close" onclick="closeScanner()">✕</button>
+  </div>
+  <div id="qr-reader-wrap">
+    <div id="qr-reader"></div>
+    <div class="scan-success-flash" id="scan-success-flash"><span class="icon">✅</span></div>
+  </div>
+  <div id="scan-error-area"></div>
+  <div class="scanner-footer">
+    <div class="scanner-hint">מקם את הברקוד במרכז המסך</div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- ══════════ מסך בחירת מחסן ══════════ -->
+  <div class="screen active" id="screen-home">
+    <div style="padding: 10px 0 20px">
+      <h1>ספירת מלאי</h1>
+      <p class="sub">בחר מחסן פעיל או פתח מחסן חדש</p>
+    </div>
+
+    <!-- קובץ פריטים (משותף לכל המחסנים) -->
+    <div class="card" id="items-file-card">
+      <h2 style="font-size:15px;margin-bottom:6px">📂 קובץ פריטים ומחסנים</h2>
+      <p class="sub" style="margin-bottom:8px">גיליון 1 — פריטים: <b>מק"ט, תיאור, יחידת מידה</b>, ועמודה אופציונלית <b>מנוהל אצווה</b> (כן / ריק)<br>גיליון 2 — שם הגיליון: <b>מחסנים</b> — עמודות <b>קוד, תיאור</b></p>
+      <div class="file-drop" onclick="document.getElementById('file-input').click()">
+        <div style="font-size:26px;margin-bottom:4px">📂</div>
+        <div style="font-size:13px;color:#888" id="file-drop-text">לחץ להעלאת קובץ<br><small>.xlsx / .xls / .csv</small></div>
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv"/>
+      </div>
+      <div class="error-msg" id="file-error" style="display:none"></div>
+      <button class="demo-btn" onclick="loadDemoData()">או טען נתוני דמו</button>
+    </div>
+
+    <div id="warehouse-cards-wrap">
+      <div class="warehouse-cards" id="warehouse-cards"></div>
+      <button class="add-wh-btn" onclick="openNewWhModal()">＋ פתח מחסן חדש</button>
+    </div>
+
+    <!-- ייצוא כולל -->
+    <div id="export-all-wrap" style="display:none;margin-top:16px">
+      <button class="action-btn" style="width:100%;padding:11px" onclick="exportAll()">⬇ ייצוא כל המחסנים לאקסל אחד</button>
+    </div>
+  </div>
+
+  <!-- ══════════ תפריט מחסן ══════════ -->
+  <div class="screen" id="screen-main">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-home');renderHomeWarehouseCards()" title="חזור לבחירת מחסן">←</button>
+      <div style="flex:1">
+        <h1 id="main-wh-title" style="font-size:17px"></h1>
+        <div class="save-indicator"><span class="save-dot"></span><span id="save-status">נשמר</span></div>
+      </div>
+      <div style="font-size:13px;color:#555;font-weight:600" id="main-entries-badge"></div>
+    </div>
+    <div id="main-menu-btns">
+      <button class="menu-btn" onclick="goToCount()"><span class="menu-btn-icon">➕</span><div><div class="menu-btn-label">הוספת ספירה</div><div class="menu-btn-desc">חיפוש פריט והזנת כמות</div></div></button>
+      <button class="menu-btn" onclick="goToHistory()"><span class="menu-btn-icon">📋</span><div><div class="menu-btn-label">ספירות אחרונות</div><div class="menu-btn-desc" id="history-menu-desc">עריכה ומחיקה</div></div></button>
+      <button class="menu-btn" onclick="goToReview()"><span class="menu-btn-icon">✅</span><div><div class="menu-btn-label">בדיקת ספירה</div><div class="menu-btn-desc" id="review-menu-desc">אימות לפי פריט</div></div></button>
+      <button class="menu-btn" onclick="showSummary()"><span class="menu-btn-icon">📊</span><div><div class="menu-btn-label">סיכום וייצוא</div><div class="menu-btn-desc">Excel למחסן זה</div></div></button>
+    </div>
+  </div>
+
+  <!-- ══════════ מסך ספירה ══════════ -->
+  <div class="screen" id="screen-count">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+      <div style="flex:1"><h2 id="count-wh-name"></h2><div style="font-size:12px;color:#888" id="count-entries-count"></div></div>
+    </div>
+    <div class="card" style="padding-bottom:8px">
+      <button class="scan-btn" onclick="openScanner('search')">📷 סריקת ברקוד לאיתור פריט</button>
+      <div class="search-wrap" style="margin-top:10px">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="item-search" placeholder='חיפוש לפי מק"ט או תיאור' oninput="filterItems()"/>
+      </div>
+      <div id="items-list"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ פריט בודד ══════════ -->
+  <div class="screen" id="screen-item">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-count')">←</button>
+      <h2>הוספת ספירה</h2>
+    </div>
+    <div class="count-entry" id="selected-item-info"></div>
+    <div class="card">
+      <button class="scan-btn" onclick="openScanner('fill')">📷 סריקת ברקוד למילוי אצווה/כמות</button>
+      <label style="margin-top:14px">כמות</label>
+      <div class="qty-row">
+        <input type="number" id="qty-input" min="0" step="0.001" placeholder="0"/>
+        <span class="qty-unit" id="qty-unit-label"></span>
+      </div>
+      <div id="batch-field-wrap" style="display:none">
+        <label>מספר אצווה <span style="color:#c00">*</span></label>
+        <input type="text" id="batch-input" placeholder="1 עד 8 ספרות" inputmode="numeric" maxlength="8"/>
+        <div class="error-msg" id="batch-error" style="display:none"></div>
+      </div>
+      <label>הערה / מיקום (אופציונלי)</label>
+      <input type="text" id="note-input" placeholder="למשל: מדף 3, שורה B"/>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="primary" style="flex:1;margin-top:0" onclick="addEntry(false)">✓ אשר ספירה</button>
+        <button class="primary" style="flex:1;margin-top:0;background:#1a5276" onclick="addEntry(true)" title="שמור וספור שוב את אותו פריט">✓ + ספור שוב</button>
+      </div>
+    </div>
+    <div id="item-prev-entries" style="display:none">
+      <p style="font-size:13px;font-weight:600;color:#888;margin-bottom:8px">ספירות קודמות לפריט זה</p>
+      <div class="card" style="padding:0 16px"><div id="prev-entries-list"></div></div>
+    </div>
+  </div>
+
+  <!-- ══════════ ספירות אחרונות ══════════ -->
+  <div class="screen" id="screen-history">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+      <h2>ספירות אחרונות</h2>
+    </div>
+    <div class="card" style="padding-bottom:8px">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="history-search" placeholder='סינון לפי מק"ט או תיאור' oninput="renderHistory()"/>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ בדיקת ספירה ══════════ -->
+  <div class="screen" id="screen-review">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+      <h2>בדיקת ספירה</h2>
+    </div>
+    <div class="review-stats" id="review-stats"></div>
+    <div class="card" style="padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span style="color:#555">התקדמות בדיקה</span>
+        <span id="review-pct" style="font-weight:700;color:#2e7d32">0%</span>
+      </div>
+      <div class="review-progress"><div class="review-progress-bar" id="review-progress-bar" style="width:0%"></div></div>
+    </div>
+    <div id="review-list"></div>
+  </div>
+
+  <!-- ══════════ סיכום ══════════ -->
+  <div class="screen" id="screen-summary">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+      <h2 id="summary-title">סיכום</h2>
+    </div>
+    <div class="stat-grid" id="stats-grid"></div>
+    <div class="card">
+      <p style="font-size:13px;font-weight:600;color:#888;margin-bottom:10px">סיכום לפי פריט</p>
+      <div id="summary-list"></div>
+    </div>
+    <button class="primary" onclick="exportCurrentWarehouse()">⬇ הורד Excel — מחסן זה</button>
+    <div id="export-msg" style="display:none"></div>
+    <button class="danger" onclick="clearCurrentWarehouse()">🗑 נקה ספירות מחסן זה</button>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════
+// מצב גלובלי
+// ══════════════════════════════════════════════════
+const STORAGE_KEY = 'inventory_v2';
+let items = [];          // רשימת פריטים (משותפת)
+let warehouseNames = []; // שמות מחסנים מהקובץ
+let warehouses = {};     // { id: { id, name, counter, entries:[], createdAt } }
+let currentWhId = null;  // מחסן פעיל
+let currentItem = null;
+let editingEntryId = null;
+
+// ── נוחות: מחסן פעיל ─────────────────────────────
+function wh() { return warehouses[currentWhId]; }
+function whEntries() { return wh() ? wh().entries : []; }
+
+// ══════════════════════════════════════════════════
+// שמירה / טעינה
+// ══════════════════════════════════════════════════
+function saveAll() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ items, warehouses, warehouseNames, savedAt: new Date().toISOString() }));
+    flashSaved();
+  } catch(e) {}
+}
+let saveTimer = null;
+function scheduleSave() {
+  const el = document.getElementById('save-status');
+  if (el) { el.textContent = 'שומר...'; el.style.color = '#aaa'; }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveAll, 800);
+}
+function flashSaved() {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  el.textContent = 'נשמר ✓'; el.style.color = '#4caf50';
+  setTimeout(() => { el.textContent = 'נשמר'; el.style.color = '#aaa'; }, 2000);
+}
+function loadAll() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    items = data.items || [];
+    warehouses = data.warehouses || {};
+    warehouseNames = data.warehouseNames || [];
+    if (items.length) document.getElementById('file-drop-text').innerHTML = '<b>פריטים שמורים ✓</b><br><small>' + items.length + ' פריטים · ' + (warehouseNames.length||'?') + ' מחסנים</small>';
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════
+// ניווט
+// ══════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ══════════════════════════════════════════════════
+// דף הבית — כרטיסי מחסנים
+// ══════════════════════════════════════════════════
+function renderHomeWarehouseCards() {
+  const wrap = document.getElementById('warehouse-cards');
+  const ids = Object.keys(warehouses);
+  if (!ids.length) { wrap.innerHTML = '<p style="text-align:center;color:#aaa;font-size:14px;padding:10px 0">עוד אין מחסנים — פתח מחסן חדש למטה</p>'; }
+  else {
+    wrap.innerHTML = ids.map(id => {
+      const w = warehouses[id];
+      const cnt = w.entries.length;
+      const checked = w.entries.filter(e => e.checked).length;
+      const isActive = id === currentWhId;
+      return `<div class="warehouse-card ${isActive?'active-wh':''}" onclick="enterWarehouse('${id}')">
+        <span class="wh-icon">🏭</span>
+        <div class="wh-info">
+          <div class="wh-name">${w.code ? w.code+' — ':''}${w.name}</div>
+          <div class="wh-meta">${cnt} ספירות${w.counter?' · '+w.counter:''}${cnt?` · ${checked}/${cnt} נבדקו`:''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+          <span class="wh-badge ${isActive?'wh-badge-active':'wh-badge-idle'}">${isActive?'פעיל':'כנס'}</span>
+        </div>
+        <button class="wh-del" onclick="deleteWarehouse(event,'${id}')" title="מחק מחסן">✕</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('export-all-wrap').style.display = ids.length > 1 ? 'block' : 'none';
+}
+
+function enterWarehouse(id) {
+  if (!items.length) { document.getElementById('file-error').textContent = 'יש להעלות קובץ פריטים קודם'; document.getElementById('file-error').style.display='block'; return; }
+  currentWhId = id;
+  updateMainMenu();
+  showScreen('screen-main');
+}
+
+function updateMainMenu() {
+  const w = wh(); if (!w) return;
+  document.getElementById('main-wh-title').textContent = '🏭 ' + w.name;
+  const cnt = w.entries.length;
+  const checked = w.entries.filter(e=>e.checked).length;
+  document.getElementById('main-entries-badge').textContent = cnt + ' ספירות';
+  document.getElementById('history-menu-desc').textContent = cnt ? cnt + ' ספירות · עריכה ומחיקה' : 'עריכה ומחיקה';
+  document.getElementById('review-menu-desc').textContent = cnt ? checked + ' / ' + cnt + ' נבדקו' : 'אימות לפי פריט';
+}
+
+// ══════════════════════════════════════════════════
+// הוספת מחסן
+// ══════════════════════════════════════════════════
+function openNewWhModal() {
+  if (!items.length) { showFileError('יש להעלות קובץ פריטים קודם'); return; }
+  if (!warehouseNames.length) { showFileError('הקובץ אינו מכיל גיליון מחסנים'); return; }
+  // בנה רשימת מחסנים זמינים (לא פתוחים כבר)
+  const openNames = new Set(Object.values(warehouses).map(w=>w.code||w.name));
+  const available = warehouseNames.filter(w=>!openNames.has(w.code));
+  const taken = warehouseNames.filter(w=>openNames.has(w.code));
+  const sel = document.getElementById('new-wh-select');
+  sel.innerHTML = '<option value="">— בחר מחסן —</option>' +
+    available.map(w=>`<option value="${w.code}">${w.code} — ${w.name}</option>`).join('') +
+    (taken.length ? '<optgroup label="פתוחים כבר:">' +
+      taken.map(w=>`<option disabled value="">${w.code} — ${w.name} (פתוח)</option>`).join('') +
+    '</optgroup>' : '');
+  document.getElementById('new-wh-counter').value='';
+  document.getElementById('new-wh-error').style.display='none';
+  const sub = document.getElementById('new-wh-modal-sub');
+  sub.textContent = available.length ? available.length + ' מחסנים זמינים' : 'כל המחסנים פתוחים כבר';
+  document.getElementById('new-wh-modal').style.display='flex';
+}
+function closeNewWhModal(ev) { if (ev && ev.target!==document.getElementById('new-wh-modal')) return; document.getElementById('new-wh-modal').style.display='none'; }
+function confirmNewWarehouse() {
+  const code = document.getElementById('new-wh-select').value;
+  if (!code) {
+    const err = document.getElementById('new-wh-error');
+    err.textContent = 'יש לבחור מחסן'; err.style.display='block'; return;
+  }
+  // בדיקה כפולה — מחסן זה כבר פתוח?
+  const alreadyOpen = Object.values(warehouses).find(w=>w.code===code);
+  if (alreadyOpen) {
+    const err = document.getElementById('new-wh-error');
+    err.textContent = 'מחסן זה כבר פתוח ופעיל'; err.style.display='block'; return;
+  }
+  const whDef = warehouseNames.find(w=>w.code===code);
+  const id = 'wh_' + Date.now();
+  warehouses[id] = { id, code, name: whDef ? whDef.name : code, counter: document.getElementById('new-wh-counter').value.trim(), entries: [], createdAt: new Date().toISOString() };
+  document.getElementById('new-wh-modal').style.display = 'none';
+  saveAll();
+  renderHomeWarehouseCards();
+  showToast('מחסן ' + code + ' — ' + (whDef?whDef.name:'') + ' נפתח');
+  enterWarehouse(id);
+}
+
+function deleteWarehouse(ev, id) {
+  ev.stopPropagation();
+  const w = warehouses[id];
+  if (!confirm('למחוק את מחסן "' + w.name + '" וכל ' + w.entries.length + ' ספירותיו?')) return;
+  if (currentWhId === id) currentWhId = null;
+  delete warehouses[id];
+  saveAll();
+  renderHomeWarehouseCards();
+  showToast('מחסן נמחק');
+}
+
+// ══════════════════════════════════════════════════
+// קובץ פריטים
+// ══════════════════════════════════════════════════
+function loadDemoData() {
+  items = [
+    {sku:'1001',name:'בורג M6x20',unit:'יח׳',batchManaged:false},{sku:'1002',name:'אום M6',unit:'יח׳',batchManaged:false},
+    {sku:'1311500',name:'פח גלוון 1mm',unit:'ק"ג',batchManaged:false},{sku:'2002',name:'פח אינוקס 2mm',unit:'ק"ג',batchManaged:false},
+    {sku:'3001',name:'צינור PVC 25mm',unit:'יח׳',batchManaged:false},{sku:'3002',name:'מרפק PVC 25mm',unit:'יח׳',batchManaged:false},
+    {sku:'4001',name:'כבל חשמל 2.5mm',unit:'מ׳',batchManaged:false},
+    {sku:'6666666',name:'פריט מנוהל אצווה 1',unit:'ק"ג',batchManaged:true},
+    {sku:'6666667',name:'פריט מנוהל אצווה 2',unit:'ק"ג',batchManaged:true},
+  ];
+  warehouseNames = [{code:'M01',name:'מחסן ראשי'},{code:'M02',name:'מחסן חומרים גלם'},{code:'M03',name:'מחסן גמר'},{code:'M04',name:'מחסן כלים'},{code:'M05',name:'מחסן חלפים'}];
+  document.getElementById('file-drop-text').innerHTML = '<b>נתוני דמו ✓</b><br><small>' + items.length + ' פריטים · ' + warehouseNames.length + ' מחסנים</small>';
+  document.getElementById('file-error').style.display = 'none';
+  saveAll();
+}
+document.getElementById('file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+
+      // ── עזר: חיפוש עמודה לפי מילות מפתח (עובד עם עברית ואנגלית) ──
+      function findCol(headers, keywords) {
+        return headers.findIndex(h => {
+          const v = String(h||'').trim();
+          return keywords.some(k => v.includes(k));
+        });
+      }
+
+      // ── גיליון פריטים (גיליון ראשון) ──
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+      if (rows.length < 2) { showFileError('גיליון הפריטים ריק'); return; }
+      const h = rows[0];
+      const sc = findCol(h, ['מק"ט','מקט','מק','sku','קוד פריט']);
+      const nc = findCol(h, ['תיאור','תאור','שם','name']);
+      const uc = findCol(h, ['יחידת מידה','יחידה','יח','unit','מידה']);
+      const bc = findCol(h, ['מנוהל אצווה','אצווה','batch']);
+      if (sc<0) { showFileError('לא נמצאה עמודת מק"ט בגיליון הפריטים'); return; }
+      if (nc<0) { showFileError('לא נמצאה עמודת תיאור בגיליון הפריטים'); return; }
+      items = rows.slice(1)
+        .filter(r => r[sc] != null && r[nc] != null)
+        .map(r => ({
+          sku:  String(r[sc]).trim(),
+          name: String(r[nc]).trim(),
+          unit: uc>=0 && r[uc] ? String(r[uc]).trim() : 'יח׳',
+          batchManaged: bc>=0 && r[bc] ? String(r[bc]).trim() === 'כן' : false
+        }));
+
+      // ── גיליון מחסנים (גיליון בשם "מחסנים" או "warehouse") ──
+      warehouseNames = [];
+      const whSheetName = wb.SheetNames.find(n =>
+        n.includes('מחסנים') || n.includes('מחסן') || n.toLowerCase().includes('warehouse')
+      );
+      if (whSheetName) {
+        const wrows = XLSX.utils.sheet_to_json(wb.Sheets[whSheetName], {header:1});
+        if (wrows.length > 1) {
+          const wh = wrows[0];
+          const cc = findCol(wh, ['קוד','code','מספר','id']);
+          const nn = findCol(wh, ['תאור','תיאור','שם','name']);
+          const codeIdx = cc>=0 ? cc : 0;
+          const nameIdx = nn>=0 ? nn : 1;
+          warehouseNames = wrows.slice(1)
+            .filter(r => r[codeIdx] != null || r[nameIdx] != null)
+            .map(r => ({
+              code: r[codeIdx] != null ? String(r[codeIdx]).trim() : '',
+              name: r[nameIdx] != null ? String(r[nameIdx]).trim() : ''
+            }))
+            .filter(w => w.code || w.name);
+        }
+      }
+
+      const whTxt = warehouseNames.length
+        ? ' · ' + warehouseNames.length + ' מחסנים'
+        : ' · ⚠️ לא נמצא גיליון "מחסנים"';
+      document.getElementById('file-drop-text').innerHTML =
+        '<b>' + file.name + ' ✓</b><br><small>' + items.length + ' פריטים' + whTxt + '</small>';
+      document.getElementById('file-error').style.display = 'none';
+      saveAll();
+    } catch(err) { showFileError('שגיאה בקריאת הקובץ: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+});
+function showFileError(msg){const el=document.getElementById('file-error');el.textContent=msg;el.style.display='block';}
+
+// ══════════════════════════════════════════════════
+// מסך ספירה
+// ══════════════════════════════════════════════════
+function goToCount() {
+  document.getElementById('count-wh-name').textContent = wh().name;
+  document.getElementById('count-entries-count').textContent = whEntries().length + ' ספירות';
+  document.getElementById('item-search').value = '';
+  renderItems('');
+  showScreen('screen-count');
+}
+function isKg(u){return u&&(u.includes('ק')||u.toLowerCase().includes('kg'));}
+function renderItems(query) {
+  const list = document.getElementById('items-list');
+  const q = query.toLowerCase();
+  const filtered = items.filter(i=>!q||i.sku.toLowerCase().includes(q)||i.name.toLowerCase().includes(q));
+  if (!filtered.length){list.innerHTML='<p class="no-items">לא נמצאו פריטים</p>';return;}
+  list.innerHTML = filtered.map(i=>{
+    const cnt = whEntries().filter(e=>e.sku===i.sku).length;
+    const cb = cnt>0?`<span style="background:#e8f5e9;color:#2e7d32;border-radius:99px;font-size:11px;padding:2px 7px;font-weight:600">${cnt} ✓</span>`:'';
+    const batchIcon = i.batchManaged ? '<span title="מנוהל אצווה" style="font-size:13px">📦</span>' : '';
+    return `<div class="item-row" onclick="selectItem('${i.sku.replace(/'/g,"\\'")}')">
+      <div style="min-width:0;flex:1"><div class="item-name">${batchIcon} ${i.name}</div><div class="item-sku">מק"ט: ${i.sku}</div></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${cb}<span class="badge ${isKg(i.unit)?'badge-kg':'badge-unit'}">${i.unit}</span><span style="color:#bbb;font-size:18px">›</span></div>
+    </div>`;
+  }).join('');
+}
+function filterItems(){renderItems(document.getElementById('item-search').value);}
+
+function selectItem(sku) {
+  currentItem = items.find(i=>i.sku===sku); if(!currentItem) return;
+  const batchBadge = currentItem.batchManaged ? ' <span class="badge" style="background:#fff3cd;color:#8a6500">📦 מנוהל אצווה</span>' : '';
+  document.getElementById('selected-item-info').innerHTML=`<div class="item-name" style="font-size:16px;margin-bottom:4px">${currentItem.name}</div><div class="item-sku" style="margin-bottom:8px">מק"ט: ${currentItem.sku}</div><span class="badge ${isKg(currentItem.unit)?'badge-kg':'badge-unit'}">${currentItem.unit}</span>${batchBadge}`;
+  document.getElementById('qty-unit-label').textContent=currentItem.unit;
+  document.getElementById('qty-input').value='';
+  document.getElementById('note-input').value='';
+  document.getElementById('batch-input').value='';
+  document.getElementById('batch-error').style.display='none';
+  document.getElementById('batch-field-wrap').style.display = currentItem.batchManaged ? 'block' : 'none';
+  renderPrevEntries(currentItem.sku);
+  showScreen('screen-item');
+}
+function renderPrevEntries(sku){
+  const prev=whEntries().filter(e=>e.sku===sku);
+  const el=document.getElementById('item-prev-entries');
+  if(!prev.length){el.style.display='none';return;}
+  el.style.display='block';
+  document.getElementById('prev-entries-list').innerHTML=[...prev].reverse().map(e=>buildEntryRow(e,'item')).join('');
+}
+
+// ══════════════════════════════════════════════════
+// שורת ספירה
+// ══════════════════════════════════════════════════
+function buildEntryRow(e, ctx) {
+  const cb = e.checked?'<span class="checked-badge" style="margin-top:2px;display:inline-block">✓ נבדק</span>':'';
+  const batchTag = e.batchNumber ? `<div style="font-size:12px;color:#8a6500;margin-top:2px">📦 אצווה: ${e.batchNumber}</div>` : '';
+  return `<div class="history-entry ${e.checked?'checked-row':''}" id="er-${e.id}">
+    <div class="history-main">
+      ${ctx==='history'?`<div class="history-name">${e.name}</div><div class="history-sku">מק"ט: ${e.sku}</div>`:''}
+      ${batchTag}
+      ${e.note?`<div class="history-note">📍 ${e.note}</div>`:(ctx==='item'?'<div style="color:#aaa;font-size:12px">ללא הערה</div>':'')}
+      ${cb}
+    </div>
+    <div style="text-align:left;flex-shrink:0">
+      <div class="history-qty">${e.qty} ${e.unit}</div>
+      <div class="history-meta">${e.date} ${e.time}</div>
+      <div class="row-actions">
+        <button class="btn-edit" onclick="openEditModal('${e.id}')">✏️ עריכה</button>
+        <button class="del-btn" onclick="deleteEntry('${e.id}','${ctx}')">🗑</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// הוספת ספירה
+// ══════════════════════════════════════════════════
+function addEntry(stayOnItem){
+  const qty=parseFloat(document.getElementById('qty-input').value);
+  if(isNaN(qty)||qty<0){alert('יש להזין כמות תקינה');return;}
+
+  let batchNumber = '';
+  if (currentItem.batchManaged) {
+    batchNumber = document.getElementById('batch-input').value.trim();
+    const batchErr = document.getElementById('batch-error');
+    if (!/^[0-9]{1,8}$/.test(batchNumber)) {
+      batchErr.textContent = 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+      batchErr.style.display = 'block';
+      document.getElementById('batch-input').focus();
+      return;
+    }
+    batchErr.style.display = 'none';
+  }
+
+  const now=new Date();
+  wh().entries.push({
+    id:Date.now().toString(), sku:currentItem.sku, name:currentItem.name, unit:currentItem.unit, qty,
+    batchNumber: batchNumber,
+    note:document.getElementById('note-input').value.trim(),
+    time:now.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),
+    date:now.toLocaleDateString('he-IL'),
+    warehouse:wh().name, counter:wh().counter, checked:false
+  });
+  scheduleSave(); updateMainMenu();
+  document.getElementById('count-entries-count').textContent=whEntries().length+' ספירות';
+  if(stayOnItem){
+    document.getElementById('qty-input').value='';
+    document.getElementById('note-input').value='';
+    document.getElementById('batch-input').value='';
+    document.getElementById('qty-input').focus();
+    renderPrevEntries(currentItem.sku);
+    showToast('נוסף ✓ — הזן כמות נוספת');
+  } else {
+    showToast('ספירה נוספה ✓');
+    showScreen('screen-count'); renderItems('');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// עריכה / מחיקה
+// ══════════════════════════════════════════════════
+function openEditModal(id){
+  const e=whEntries().find(x=>x.id===id); if(!e) return;
+  editingEntryId=id;
+  document.getElementById('edit-modal-sub').textContent=e.name+' · מק"ט '+e.sku;
+  document.getElementById('edit-qty').value=e.qty;
+  document.getElementById('edit-unit-label').textContent=e.unit;
+  document.getElementById('edit-note').value=e.note||'';
+  const itemDef = items.find(i=>i.sku===e.sku);
+  const isBatch = itemDef ? itemDef.batchManaged : !!e.batchNumber;
+  document.getElementById('edit-batch-wrap').style.display = isBatch ? 'block' : 'none';
+  document.getElementById('edit-batch').value = e.batchNumber || '';
+  document.getElementById('edit-batch-error').style.display = 'none';
+  document.getElementById('edit-modal').style.display='flex';
+}
+function closeEditModal(ev){if(ev&&ev.target!==document.getElementById('edit-modal'))return;document.getElementById('edit-modal').style.display='none';editingEntryId=null;}
+function confirmEdit(){
+  const qty=parseFloat(document.getElementById('edit-qty').value);
+  if(isNaN(qty)||qty<0){alert('כמות לא תקינה');return;}
+  const idx=wh().entries.findIndex(x=>x.id===editingEntryId); if(idx<0) return;
+
+  const batchVisible = document.getElementById('edit-batch-wrap').style.display === 'block';
+  let batchNumber = wh().entries[idx].batchNumber || '';
+  if (batchVisible) {
+    batchNumber = document.getElementById('edit-batch').value.trim();
+    const err = document.getElementById('edit-batch-error');
+    if (!/^[0-9]{1,8}$/.test(batchNumber)) {
+      err.textContent = 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+      err.style.display = 'block';
+      return;
+    }
+    err.style.display = 'none';
+  }
+
+  wh().entries[idx].qty=qty;
+  wh().entries[idx].note=document.getElementById('edit-note').value.trim();
+  wh().entries[idx].batchNumber=batchNumber;
+  document.getElementById('edit-modal').style.display='none'; editingEntryId=null;
+  scheduleSave();
+  const active=document.querySelector('.screen.active').id;
+  if(active==='screen-history') renderHistory();
+  if(active==='screen-item') renderPrevEntries(currentItem?.sku);
+  if(active==='screen-review') renderReview();
+  renderItems(document.getElementById('item-search').value||'');
+  showToast('ספירה עודכנה ✓');
+}
+function deleteEntry(id,ctx){
+  const e=whEntries().find(x=>x.id===id); if(!e) return;
+  if(!confirm(`למחוק ספירה?\n${e.name} — ${e.qty} ${e.unit}${e.note?'\n📍 '+e.note:''}`)) return;
+  wh().entries=wh().entries.filter(x=>x.id!==id);
+  scheduleSave(); updateMainMenu();
+  if(ctx==='history') renderHistory();
+  if(ctx==='item') renderPrevEntries(currentItem?.sku);
+  if(ctx==='review') renderReview();
+  renderItems(document.getElementById('item-search').value||'');
+  showToast('ספירה נמחקה');
+}
+
+// ══════════════════════════════════════════════════
+// היסטוריה
+// ══════════════════════════════════════════════════
+function goToHistory(){document.getElementById('history-search').value='';renderHistory();showScreen('screen-history');}
+function renderHistory(){
+  const list=document.getElementById('history-list');
+  const q=(document.getElementById('history-search').value||'').toLowerCase();
+  const sorted=[...whEntries()].reverse();
+  const filtered=sorted.filter(e=>!q||e.sku.toLowerCase().includes(q)||e.name.toLowerCase().includes(q));
+  if(!filtered.length){list.innerHTML=whEntries().length===0?'<div class="empty-history"><div class="big">📋</div>עוד לא בוצעו ספירות</div>':'<p class="no-items">לא נמצאו ספירות</p>';return;}
+  list.innerHTML=filtered.map(e=>buildEntryRow(e,'history')).join('');
+}
+
+// ══════════════════════════════════════════════════
+// בדיקה
+// ══════════════════════════════════════════════════
+function goToReview(){renderReview();showScreen('screen-review');}
+function renderReview(){
+  const entries=whEntries();
+  const skus=[...new Set(entries.map(e=>e.sku))];
+  const total=entries.length, checked=entries.filter(e=>e.checked).length;
+  const pct=total?Math.round(checked/total*100):0;
+  document.getElementById('review-pct').textContent=pct+'%';
+  document.getElementById('review-progress-bar').style.width=pct+'%';
+  document.getElementById('review-stats').innerHTML=`
+    <div class="review-stat"><div class="review-stat-val">${total}</div><div class="review-stat-lbl">ספירות</div></div>
+    <div class="review-stat"><div class="review-stat-val" style="color:#2e7d32">${checked}</div><div class="review-stat-lbl">נבדקו</div></div>
+    <div class="review-stat"><div class="review-stat-val" style="color:#c00">${total-checked}</div><div class="review-stat-lbl">ממתינות</div></div>`;
+  if(!skus.length){document.getElementById('review-list').innerHTML='<div class="empty-history"><div class="big">✅</div>אין ספירות לבדיקה</div>';return;}
+  document.getElementById('review-list').innerHTML=skus.map(sku=>{
+    const se=entries.filter(e=>e.sku===sku);
+    const skuChecked=se.filter(e=>e.checked).length;
+    const totalQty=se.reduce((s,e)=>s+e.qty,0);
+    const allOk=skuChecked===se.length;
+    const sid=sku.replace(/[^a-z0-9]/gi,'_');
+    return `<div class="review-item-card" id="ric-${sid}">
+      <div class="review-item-header" style="${allOk?'background:#f6fff8':''}" onclick="toggleReviewItem('${sku.replace(/'/g,"\\'")}')">
+        <div style="flex:1;min-width:0">
+          <div class="review-item-title">${se[0].name}</div>
+          <div class="review-item-meta" id="rim-${sid}">מק"ט ${sku} · ${se.length} ספירות · ${skuChecked} נבדקו</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${allOk?'<span class="checked-badge">✓ הכל נבדק</span>':''}
+          <div style="font-size:15px;font-weight:700">${parseFloat(totalQty.toFixed(3))} ${se[0].unit}</div>
+          <span class="chevron-icon" id="chv-${sid}">›</span>
+        </div>
+      </div>
+      <div class="review-item-body" id="rib-${sid}">${se.map(e=>buildReviewRow(e)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+function buildReviewRow(e){
+  return `<div class="review-entry-row ${e.checked?'is-checked':''}" id="rer-${e.id}">
+    <input type="checkbox" class="review-checkbox" ${e.checked?'checked':''} onchange="toggleCheck('${e.id}',this.checked)"/>
+    <div class="review-entry-info">
+      <div class="review-entry-qty">${e.qty} ${e.unit}${e.batchNumber?' · 📦 '+e.batchNumber:''}</div>
+      <div class="review-entry-detail">${e.note?'📍 '+e.note+' · ':''}${e.date} ${e.time}${e.counter?' · '+e.counter:''}</div>
+    </div>
+    <div style="display:flex;gap:5px;flex-shrink:0">
+      <button class="btn-edit" onclick="openEditModal('${e.id}')">✏️</button>
+      <button class="del-btn" onclick="deleteEntry('${e.id}','review')">🗑</button>
+    </div>
+  </div>`;
+}
+function toggleReviewItem(sku){
+  const sid=sku.replace(/[^a-z0-9]/gi,'_');
+  const body=document.getElementById('rib-'+sid), chv=document.getElementById('chv-'+sid);
+  if(!body) return;
+  body.classList.toggle('open'); chv.classList.toggle('open');
+}
+function toggleCheck(id,checked){
+  const idx=wh().entries.findIndex(e=>e.id===id); if(idx<0) return;
+  wh().entries[idx].checked=checked;
+  scheduleSave(); updateMainMenu();
+  const row=document.getElementById('rer-'+id);
+  if(row) row.className='review-entry-row '+(checked?'is-checked':'');
+  // עדכן header
+  const sku=wh().entries[idx].sku;
+  const se=whEntries().filter(e=>e.sku===sku);
+  const skuChecked=se.filter(e=>e.checked).length;
+  const allOk=skuChecked===se.length;
+  const sid=sku.replace(/[^a-z0-9]/gi,'_');
+  const meta=document.getElementById('rim-'+sid);
+  if(meta) meta.textContent=`מק"ט ${sku} · ${se.length} ספירות · ${skuChecked} נבדקו`;
+  const header=document.querySelector('#ric-'+sid+' .review-item-header');
+  if(header){
+    header.style.background=allOk?'#f6fff8':'';
+    const existing=header.querySelector('.checked-badge');
+    if(allOk&&!existing){const b=document.createElement('span');b.className='checked-badge';b.textContent='✓ הכל נבדק';header.querySelector('div:last-child').insertBefore(b,header.querySelector('div:last-child').firstChild);}
+    else if(!allOk&&existing) existing.remove();
+  }
+  // עדכן progress
+  const total=whEntries().length, totalChecked=whEntries().filter(e=>e.checked).length;
+  const pct=total?Math.round(totalChecked/total*100):0;
+  document.getElementById('review-pct').textContent=pct+'%';
+  document.getElementById('review-progress-bar').style.width=pct+'%';
+  document.getElementById('review-stats').innerHTML=`
+    <div class="review-stat"><div class="review-stat-val">${total}</div><div class="review-stat-lbl">ספירות</div></div>
+    <div class="review-stat"><div class="review-stat-val" style="color:#2e7d32">${totalChecked}</div><div class="review-stat-lbl">נבדקו</div></div>
+    <div class="review-stat"><div class="review-stat-val" style="color:#c00">${total-totalChecked}</div><div class="review-stat-lbl">ממתינות</div></div>`;
+}
+
+// ══════════════════════════════════════════════════
+// סיכום
+// ══════════════════════════════════════════════════
+function showSummary(){
+  const entries=whEntries();
+  const skus=[...new Set(entries.map(e=>e.sku))];
+  document.getElementById('summary-title').textContent='סיכום — '+wh().name;
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat"><div class="stat-val">${entries.length}</div><div class="stat-lbl">ספירות</div></div>
+    <div class="stat"><div class="stat-val">${skus.length}</div><div class="stat-lbl">פריטים</div></div>
+    <div class="stat"><div class="stat-val">${parseFloat(entries.reduce((s,e)=>s+e.qty,0).toFixed(1))}</div><div class="stat-lbl">סה"כ כמות</div></div>`;
+  if(!skus.length){document.getElementById('summary-list').innerHTML='<p class="no-items">אין ספירות עדיין</p>';}
+  else document.getElementById('summary-list').innerHTML=skus.map(sku=>{
+    const se=entries.filter(e=>e.sku===sku);
+    const total=se.reduce((s,e)=>s+e.qty,0);
+    return `<div class="summary-row"><div><div style="font-weight:600">${se[0].name}</div><div style="font-size:12px;color:#888">מק"ט ${sku} · ${se.length} ספירות</div></div><div class="summary-total">${parseFloat(total.toFixed(3))} ${se[0].unit}</div></div>`;
+  }).join('');
+  document.getElementById('export-msg').style.display='none';
+  showScreen('screen-summary');
+}
+
+// ══════════════════════════════════════════════════
+// ייצוא
+// ══════════════════════════════════════════════════
+function buildWorkbook(warehouseList) {
+  const wb = XLSX.utils.book_new();
+  warehouseList.forEach(w => {
+    if (!w.entries.length) return;
+    const ws1Data = [['מחסן','מק"ט','תיאור','כמות','יחידה','מספר אצווה','הערה','תאריך','שעה','סופר','נבדק']];
+    w.entries.forEach(e => ws1Data.push([w.name,e.sku,e.name,e.qty,e.unit,e.batchNumber||'',e.note||'',e.date,e.time,e.counter||'',e.checked?'✓':'']));
+    const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+    ws1['!cols']=[14,12,28,10,8,14,20,12,8,14,8].map(x=>({wch:x}));
+    const sheetName = w.name.substring(0,28).replace(/[:\\\/\?\*\[\]]/g,'_');
+    XLSX.utils.book_append_sheet(wb, ws1, sheetName + ' - ספירות');
+    const skus=[...new Set(w.entries.map(e=>e.sku))];
+    const ws2Data=[['מחסן','מק"ט','תיאור','סה"כ','יחידה','מס׳ ספירות','נבדקו']];
+    skus.forEach(sku=>{const se=w.entries.filter(e=>e.sku===sku);ws2Data.push([w.name,sku,se[0].name,parseFloat(se.reduce((s,e)=>s+e.qty,0).toFixed(3)),se[0].unit,se.length,se.filter(e=>e.checked).length]);});
+    const ws2=XLSX.utils.aoa_to_sheet(ws2Data);
+    ws2['!cols']=[14,12,28,12,8,14,8].map(x=>({wch:x}));
+    XLSX.utils.book_append_sheet(wb, ws2, sheetName + ' - סיכום');
+  });
+  return wb;
+}
+
+function exportCurrentWarehouse(){
+  if(!whEntries().length){alert('אין ספירות לייצוא');return;}
+  const wb=buildWorkbook([wh()]);
+  const date=new Date().toLocaleDateString('he-IL').replace(/\//g,'-');
+  XLSX.writeFile(wb,'ספירת_מלאי_'+wh().name+'_'+date+'.xlsx');
+  const msg=document.getElementById('export-msg');
+  msg.className='success-msg';msg.textContent='✓ הקובץ הורד בהצלחה';msg.style.display='block';
+}
+
+function exportAll(){
+  const whList=Object.values(warehouses).filter(w=>w.entries.length);
+  if(!whList.length){alert('אין ספירות בשום מחסן');return;}
+  const wb=buildWorkbook(whList);
+  const date=new Date().toLocaleDateString('he-IL').replace(/\//g,'-');
+  XLSX.writeFile(wb,'ספירת_מלאי_כל_המחסנים_'+date+'.xlsx');
+  showToast('ייצוא כל המחסנים ✓');
+}
+
+function clearCurrentWarehouse(){
+  if(!confirm('למחוק את כל ספירות מחסן "'+wh().name+'"?\nפעולה זו לא ניתנת לביטול.')) return;
+  wh().entries=[];
+  saveAll(); updateMainMenu();
+  showScreen('screen-main');
+  showToast('ספירות המחסן נמחקו');
+}
+
+// ══════════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════════
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+// ══════════════════════════════════════════════════
+// סריקת ברקוד
+// ══════════════════════════════════════════════════
+let html5QrCode = null;
+let scannerMode = null; // 'search' | 'fill'
+let scannerBusy = false;
+
+function openScanner(mode) {
+  scannerMode = mode;
+  scannerBusy = false;
+  document.getElementById('scanner-title').textContent = mode === 'fill' ? '📷 סריקה — מילוי אצווה/כמות' : '📷 סריקה — איתור פריט';
+  document.getElementById('scan-error-area').innerHTML = '';
+  document.getElementById('scan-success-flash').classList.remove('show');
+  document.getElementById('scanner-overlay').style.display = 'flex';
+
+  if (typeof Html5Qrcode === 'undefined') {
+    showScanError('שגיאה', 'ספריית הסריקה לא נטענה. בדוק חיבור לאינטרנט ונסה שוב.');
+    return;
+  }
+
+  html5QrCode = new Html5Qrcode('qr-reader');
+  const config = { fps: 10, qrbox: { width: 260, height: 160 }, aspectRatio: 1.5 };
+
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    config,
+    onScanSuccess,
+    () => {} // שגיאות סריקה רגילות (לא נמצא ברקוד בפריים) — מתעלמים
+  ).catch(err => {
+    showScanError('לא ניתן לפתוח מצלמה', 'יש לאשר הרשאת מצלמה בדפדפן, או לבדוק שהמכשיר תומך בכך.');
+  });
+}
+
+function closeScanner() {
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => { html5QrCode.clear(); html5QrCode = null; }).catch(() => { html5QrCode = null; });
+  }
+  document.getElementById('scanner-overlay').style.display = 'none';
+}
+
+function showScanError(title, detail) {
+  document.getElementById('scan-error-area').innerHTML = `
+    <div class="scan-error-box">
+      <div class="title">⚠️ ${title}</div>
+      <div class="detail">${detail}</div>
+    </div>`;
+}
+
+function onScanSuccess(decodedText) {
+  if (scannerBusy) return; // מנע סריקות כפולות מהירות
+  scannerBusy = true;
+
+  const parsed = parseBarcode(decodedText);
+  if (!parsed) {
+    showScanError('ברקוד לא תקין', 'הפורמט הצפוי: מק"ט-אצווה או מק"ט-אצווה-כמות');
+    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 1800);
+    return;
+  }
+
+  if (scannerMode === 'search') {
+    handleScanForSearch(parsed);
+  } else {
+    handleScanForFill(parsed);
+  }
+}
+
+// פורמט: מקט-אצווה[-כמות]
+function parseBarcode(text) {
+  const parts = String(text).trim().split('-');
+  if (parts.length < 2) return null;
+  const sku = parts[0].trim();
+  const batch = parts[1].trim();
+  const qty = parts.length >= 3 ? parts[2].trim() : null;
+  if (!sku || !batch) return null;
+  if (qty !== null && isNaN(parseFloat(qty))) return null;
+  return { sku, batch, qty: qty !== null ? parseFloat(qty) : null };
+}
+
+function flashSuccess(cb) {
+  const flash = document.getElementById('scan-success-flash');
+  flash.classList.add('show');
+  setTimeout(() => { flash.classList.remove('show'); cb && cb(); }, 450);
+}
+
+// מצב 'search': זיהוי פריט אוטומטי לפי מק"ט מהברקוד
+function handleScanForSearch(parsed) {
+  const item = items.find(i => i.sku === parsed.sku);
+  if (!item) {
+    showScanError('מק"ט לא נמצא', 'מק"ט ' + parsed.sku + ' אינו קיים ברשימת הפריטים.');
+    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 2000);
+    return;
+  }
+  flashSuccess(() => {
+    closeScanner();
+    selectItem(item.sku);
+    // מילוי אוטומטי של אצווה/כמות אם קיימים בברקוד
+    if (item.batchManaged && parsed.batch) {
+      document.getElementById('batch-input').value = parsed.batch.replace(/[^0-9]/g,'').slice(0,8);
+    }
+    if (parsed.qty !== null) {
+      document.getElementById('qty-input').value = parsed.qty;
+    }
+    showToast('פריט אותר ✓ — ' + item.name);
+  });
+}
+
+// מצב 'fill': אימות שהמק"ט בברקוד תואם לפריט שכבר נבחר
+function handleScanForFill(parsed) {
+  if (!currentItem) { closeScanner(); return; }
+  if (parsed.sku !== currentItem.sku) {
+    showScanError('המק"ט אינו תואם', 'הברקוד שייך למק"ט ' + parsed.sku + ', אך הפריט שנבחר הוא מק"ט ' + currentItem.sku + '.');
+    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 2200);
+    return;
+  }
+  flashSuccess(() => {
+    closeScanner();
+    if (currentItem.batchManaged) {
+      document.getElementById('batch-input').value = parsed.batch.replace(/[^0-9]/g,'').slice(0,8);
+      document.getElementById('batch-error').style.display = 'none';
+    }
+    if (parsed.qty !== null) {
+      document.getElementById('qty-input').value = parsed.qty;
+    }
+    showToast('ברקוד תואם ✓ — שדות מולאו');
+  });
+}
+
+// ══════════════════════════════════════════════════
+// אתחול
+// ══════════════════════════════════════════════════
+loadAll();
+renderHomeWarehouseCards();
+</script>
+</body>
+</html>
