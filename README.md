@@ -1,0 +1,2 @@
+# sfirat-mlai
+invntory count
