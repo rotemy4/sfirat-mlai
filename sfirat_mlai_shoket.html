@@ -313,6 +313,7 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
       <button class="menu-btn" onclick="goToHistory()"><span class="menu-btn-icon">📋</span><div><div class="menu-btn-label">ספירות אחרונות</div><div class="menu-btn-desc" id="history-menu-desc">עריכה ומחיקה</div></div></button>
       <button class="menu-btn" onclick="goToReview()"><span class="menu-btn-icon">✅</span><div><div class="menu-btn-label">בדיקת ספירה</div><div class="menu-btn-desc" id="review-menu-desc">אימות לפי פריט</div></div></button>
       <button class="menu-btn" onclick="showSummary()"><span class="menu-btn-icon">📊</span><div><div class="menu-btn-label">סיכום וייצוא</div><div class="menu-btn-desc">Excel למחסן זה</div></div></button>
+      <button class="menu-btn" onclick="showMissingItems()"><span class="menu-btn-icon">⚠️</span><div><div class="menu-btn-label">פריטים שלא נספרו</div><div class="menu-btn-desc" id="missing-menu-desc">פריטים ששויכו למחסן זה אך אין להם ספירה</div></div></button>
     </div>
   </div>
 
@@ -452,6 +453,18 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
     <button class="danger" onclick="clearCurrentWarehouse()">🗑 נקה ספירות מחסן זה</button>
   </div>
 
+  <!-- ══════════ מסך פריטים שלא נספרו ══════════ -->
+  <div class="screen" id="screen-missing">
+    <div class="top-bar">
+      <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+      <h2>פריטים שלא נספרו</h2>
+    </div>
+    <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff8e1;border-color:#ffe082">
+      <div style="font-size:13px;color:#8a6500" id="missing-summary-text"></div>
+    </div>
+    <div id="missing-list"></div>
+  </div>
+
 </div><!-- /app -->
 
 <script>
@@ -558,6 +571,19 @@ function updateMainMenu() {
   document.getElementById('main-entries-badge').textContent = cnt + ' ספירות';
   document.getElementById('history-menu-desc').textContent = cnt ? cnt + ' ספירות · עריכה ומחיקה' : 'עריכה ומחיקה';
   document.getElementById('review-menu-desc').textContent = cnt ? checked + ' / ' + cnt + ' נבדקו' : 'אימות לפי פריט';
+  // עדכון מונה פריטים חסרים
+  const currentCode = w.code || w.name;
+  const countedSkus = new Set(w.entries.map(e=>e.sku));
+  let expectedItems;
+  if (warehouseAssignments.length && currentCode) {
+    const assignedSkus = new Set(warehouseAssignments.filter(a=>a.warehouseCode===currentCode).map(a=>a.sku));
+    expectedItems = assignedSkus.size ? items.filter(i=>assignedSkus.has(i.sku)) : items;
+  } else {
+    expectedItems = items;
+  }
+  const missingCount = expectedItems.filter(i=>!countedSkus.has(i.sku)).length;
+  const d = document.getElementById('missing-menu-desc');
+  if (d) d.textContent = missingCount ? missingCount + ' פריטים ממתינים לספירה' : 'כל הפריטים נספרו ✓';
 }
 
 // ══════════════════════════════════════════════════
@@ -1087,11 +1113,29 @@ function buildWorkbook(warehouseList) {
     ws1['!cols']=[14,12,28,10,8,14,20,12,8,14,8].map(x=>({wch:x}));
     const sheetName = w.name.substring(0,28).replace(/[:\\\/\?\*\[\]]/g,'_');
     XLSX.utils.book_append_sheet(wb, ws1, sheetName + ' - ספירות');
+
+    // ── גיליון סיכום — פריטים רגילים לפי מק"ט, מנוהלי אצווה לפי מק"ט+אצווה ──
+    const ws2Data=[['מחסן','מק"ט','תיאור','מספר אצווה','סה"כ','יחידה','מס׳ ספירות','נבדקו']];
     const skus=[...new Set(w.entries.map(e=>e.sku))];
-    const ws2Data=[['מחסן','מק"ט','תיאור','סה"כ','יחידה','מס׳ ספירות','נבדקו']];
-    skus.forEach(sku=>{const se=w.entries.filter(e=>e.sku===sku);ws2Data.push([w.name,sku,se[0].name,parseFloat(se.reduce((s,e)=>s+e.qty,0).toFixed(3)),se[0].unit,se.length,se.filter(e=>e.checked).length]);});
+    skus.forEach(sku => {
+      const skuEntries = w.entries.filter(e=>e.sku===sku);
+      const isBatch = skuEntries.some(e=>e.batchNumber);
+      if (isBatch) {
+        // סיכום לפי אצווה
+        const batches = [...new Set(skuEntries.map(e=>e.batchNumber||''))];
+        batches.forEach(batch => {
+          const be = skuEntries.filter(e=>(e.batchNumber||'')===batch);
+          const total = be.reduce((s,e)=>s+e.qty,0);
+          ws2Data.push([w.name, sku, be[0].name, batch, parseFloat(total.toFixed(3)), be[0].unit, be.length, be.filter(e=>e.checked).length]);
+        });
+      } else {
+        // סיכום רגיל לפי מק"ט
+        const total = skuEntries.reduce((s,e)=>s+e.qty,0);
+        ws2Data.push([w.name, sku, skuEntries[0].name, '', parseFloat(total.toFixed(3)), skuEntries[0].unit, skuEntries.length, skuEntries.filter(e=>e.checked).length]);
+      }
+    });
     const ws2=XLSX.utils.aoa_to_sheet(ws2Data);
-    ws2['!cols']=[14,12,28,12,8,14,8].map(x=>({wch:x}));
+    ws2['!cols']=[14,12,28,12,12,8,14,8].map(x=>({wch:x}));
     XLSX.utils.book_append_sheet(wb, ws2, sheetName + ' - סיכום');
   });
   return wb;
@@ -1121,6 +1165,72 @@ function clearCurrentWarehouse(){
   saveAll(); updateMainMenu();
   showScreen('screen-main');
   showToast('ספירות המחסן נמחקו');
+}
+
+// ══════════════════════════════════════════════════
+// פריטים שלא נספרו
+// ══════════════════════════════════════════════════
+function showMissingItems() {
+  const currentCode = wh() ? (wh().code || wh().name) : null;
+  const countedSkus = new Set(whEntries().map(e => e.sku));
+
+  // קבע את רשימת הפריטים הצפויים — לפי שיוכים אם קיים, אחרת כל הפריטים
+  let expectedItems;
+  if (warehouseAssignments.length && currentCode) {
+    const assignedSkus = new Set(
+      warehouseAssignments.filter(a => a.warehouseCode === currentCode).map(a => a.sku)
+    );
+    expectedItems = assignedSkus.size ? items.filter(i => assignedSkus.has(i.sku)) : items;
+  } else {
+    expectedItems = items;
+  }
+
+  const missing = expectedItems.filter(i => !countedSkus.has(i.sku));
+
+  // עדכון תיאור בתפריט
+  const d = document.getElementById('missing-menu-desc');
+  if (d) d.textContent = missing.length ? missing.length + ' פריטים ממתינים לספירה' : 'כל הפריטים נספרו ✓';
+
+  // כותרת סיכום
+  document.getElementById('missing-summary-text').innerHTML = missing.length
+    ? `<b>${missing.length} פריטים</b> מתוך ${expectedItems.length} לא נספרו כלל במחסן זה`
+    : `<b style="color:#0a6640">✓ כל ${expectedItems.length} הפריטים נספרו!</b>`;
+
+  // רשימה
+  const list = document.getElementById('missing-list');
+  if (!missing.length) {
+    list.innerHTML = `<div style="text-align:center;padding:32px 0;color:#aaa">
+      <div style="font-size:40px;margin-bottom:8px">✅</div>
+      <div style="font-size:14px">כל הפריטים במחסן זה נספרו</div>
+    </div>`;
+  } else {
+    list.innerHTML = missing.map(i => `
+      <div class="card" style="padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#111">${i.name}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">מק"ט: ${i.sku}${i.batchManaged?' · 📦 מנוהל אצווה':''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span class="badge ${isKg(i.unit)?'badge-kg':'badge-unit'}">${i.unit}</span>
+          <button onclick="goCountItem('${i.sku.replace(/'/g,"\\'")}')"
+            style="background:#111;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap">
+            ➕ ספור
+          </button>
+        </div>
+      </div>`).join('');
+  }
+  showScreen('screen-missing');
+}
+
+// כפתור "ספור" ממסך הפריטים החסרים — עובר ישר לספירת הפריט
+function goCountItem(sku) {
+  // עדכן את מסך הספירה כרגיל
+  document.getElementById('count-wh-name').textContent = wh().name;
+  document.getElementById('count-entries-count').textContent = whEntries().length + ' ספירות';
+  document.getElementById('item-search').value = '';
+  renderItems('');
+  // עבור ישר למסך הפריט הספציפי (דלג על מסך החיפוש)
+  selectItem(sku);
 }
 
 // ══════════════════════════════════════════════════
