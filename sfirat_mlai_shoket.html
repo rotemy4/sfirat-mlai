@@ -1543,14 +1543,32 @@ function showScanError(title, detail) {
     </div>`;
 }
 
+// אחרי שגיאת סריקה: ההודעה נשארת על המסך עד שהמשתמש בוחר לסרוק שוב
+function showRetryButton() {
+  const box = document.querySelector('#scan-error-area .scan-error-box');
+  if (!box) { scannerBusy = false; return; }
+  const btn = document.createElement('button');
+  btn.className = 'scanner-manual-btn';
+  btn.style.cssText = 'margin-top:10px;margin-left:8px;background:#0a6640;border-color:#0a6640';
+  btn.textContent = '📷 סרוק שוב';
+  btn.onclick = () => { document.getElementById('scan-error-area').innerHTML = ''; scannerBusy = false; };
+  box.insertBefore(btn, box.querySelector('button'));
+}
+
+function escHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// השוואת מק"טים סלחנית: מתעלמת מרווחים ומאפסים מובילים
+function normSku(x) { return String(x == null ? '' : x).trim().replace(/^0+(?=.)/, ''); }
+function sameSku(a, b) { return normSku(a) === normSku(b); }
+
 function onScanSuccess(decodedText) {
   if (scannerBusy) return; // מנע סריקות כפולות מהירות
   scannerBusy = true;
 
   const parsed = parseBarcode(decodedText);
   if (!parsed) {
-    showScanError('ברקוד לא תקין', 'הפורמט הצפוי: מק"ט-אצווה או מק"ט-אצווה-כמות');
-    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 1800);
+    showScanError('ברקוד לא תקין', 'נסרק: ' + escHtml(decodedText) + '<br>הפורמט הצפוי: מק"ט-אצווה או מק"ט-אצווה-כמות');
+    showRetryButton();
     return;
   }
 
@@ -1563,7 +1581,13 @@ function onScanSuccess(decodedText) {
 
 // פורמט: מקט-אצווה[-כמות]
 function parseBarcode(text) {
-  const parts = String(text).trim().split('-');
+  // ניקוי: כוכביות של Code39 (*123-456*), תווי בקרה, רווחים וסוגי מקפים שונים
+  const clean = String(text)
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\*/g, '')
+    .trim();
+  const parts = clean.split('-');
   if (parts.length < 2) return null;
   const sku = parts[0].trim();
   const batch = parts[1].trim();
@@ -1581,17 +1605,17 @@ function flashSuccess(cb) {
 
 // מצב 'search': זיהוי פריט אוטומטי לפי מק"ט מהברקוד
 function handleScanForSearch(parsed) {
-  const item = items.find(i => i.sku === parsed.sku);
+  const item = items.find(i => sameSku(i.sku, parsed.sku));
   if (!item) {
     showScanError('מק"ט לא נמצא', 'מק"ט ' + parsed.sku + ' אינו קיים ברשימת הפריטים.');
-    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 2000);
+    showRetryButton();
     return;
   }
   // בדיקה שהפריט שייך למחסן הנוכחי (אם יש שיוכים)
   const allowedItems = getItemsForWarehouse();
-  if (!allowedItems.find(i => i.sku === parsed.sku)) {
+  if (!allowedItems.find(i => sameSku(i.sku, parsed.sku))) {
     showScanError('פריט לא שייך למחסן זה', 'מק"ט ' + parsed.sku + ' (' + item.name + ') אינו מוגדר במחסן זה בגיליון השיוכים.');
-    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 2500);
+    showRetryButton();
     return;
   }
   flashSuccess(() => {
@@ -1611,9 +1635,9 @@ function handleScanForSearch(parsed) {
 // מצב 'fill': אימות שהמק"ט בברקוד תואם לפריט שכבר נבחר
 function handleScanForFill(parsed) {
   if (!currentItem) { closeScanner(); return; }
-  if (parsed.sku !== currentItem.sku) {
+  if (!sameSku(parsed.sku, currentItem.sku)) {
     showScanError('המק"ט אינו תואם', 'הברקוד שייך למק"ט ' + parsed.sku + ', אך הפריט שנבחר הוא מק"ט ' + currentItem.sku + '.');
-    setTimeout(() => { scannerBusy = false; document.getElementById('scan-error-area').innerHTML=''; }, 2200);
+    showRetryButton();
     return;
   }
   flashSuccess(() => {
