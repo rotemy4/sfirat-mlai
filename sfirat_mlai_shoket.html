@@ -434,6 +434,10 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
       </div>
       <div class="review-progress"><div class="review-progress-bar" id="review-progress-bar" style="width:0%"></div></div>
     </div>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="review-search" placeholder='חיפוש לפי מק"ט או תיאור' oninput="renderReview()"/>
+    </div>
     <div id="review-list"></div>
   </div>
 
@@ -993,7 +997,7 @@ function renderHistory(){
 // ══════════════════════════════════════════════════
 // בדיקה
 // ══════════════════════════════════════════════════
-function goToReview(){renderReview();showScreen('screen-review');}
+function goToReview(){document.getElementById('review-search').value='';renderReview();showScreen('screen-review');}
 function renderReview(){
   const entries=whEntries();
   const skus=[...new Set(entries.map(e=>e.sku))];
@@ -1006,7 +1010,15 @@ function renderReview(){
     <div class="review-stat"><div class="review-stat-val" style="color:#2e7d32">${checked}</div><div class="review-stat-lbl">נבדקו</div></div>
     <div class="review-stat"><div class="review-stat-val" style="color:#c00">${total-checked}</div><div class="review-stat-lbl">ממתינות</div></div>`;
   if(!skus.length){document.getElementById('review-list').innerHTML='<div class="empty-history"><div class="big">✅</div>אין ספירות לבדיקה</div>';return;}
-  document.getElementById('review-list').innerHTML=skus.map(sku=>{
+  const q=(document.getElementById('review-search').value||'').trim().toLowerCase();
+  const shown=skus.filter(sku=>{
+    if(!q) return true;
+    const name=(entries.find(e=>e.sku===sku).name||'').toLowerCase();
+    return sku.toLowerCase().includes(q)||name.includes(q);
+  });
+  if(!shown.length){document.getElementById('review-list').innerHTML='<p class="no-items">לא נמצאו פריטים</p>';return;}
+  const autoOpen=q&&shown.length===1;
+  document.getElementById('review-list').innerHTML=shown.map(sku=>{
     const se=entries.filter(e=>e.sku===sku);
     const skuChecked=se.filter(e=>e.checked).length;
     const totalQty=se.reduce((s,e)=>s+e.qty,0);
@@ -1021,10 +1033,10 @@ function renderReview(){
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           ${allOk?'<span class="checked-badge">✓ הכל נבדק</span>':''}
           <div style="font-size:15px;font-weight:700">${parseFloat(totalQty.toFixed(3))} ${se[0].unit}</div>
-          <span class="chevron-icon" id="chv-${sid}">›</span>
+          <span class="chevron-icon${autoOpen?' open':''}" id="chv-${sid}">›</span>
         </div>
       </div>
-      <div class="review-item-body" id="rib-${sid}">${se.map(e=>buildReviewRow(e)).join('')}</div>
+      <div class="review-item-body${autoOpen?' open':''}" id="rib-${sid}">${se.map(e=>buildReviewRow(e)).join('')}</div>
     </div>`;
   }).join('');
 }
