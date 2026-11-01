@@ -393,15 +393,6 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
         </div>
       </div>
 
-      <div id="exc-unit-wrap" style="display:none">
-        <label>יחידת מידה <span style="color:#c00">*</span></label>
-        <select id="exc-unit-select" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;background:#fafafa">
-          <option value="">— בחר יחידה —</option>
-          <option value='ק"ג'>ק"ג</option>
-          <option value="יח׳">יח׳</option>
-        </select>
-        <div class="error-msg" id="exc-unit-error" style="display:none">יש לבחור יחידת מידה</div>
-      </div>
       <div id="batch-field-wrap" style="display:none">
         <label>מספר אצווה <span style="color:#c00">*</span></label>
         <input type="text" id="batch-input" placeholder="1 עד 8 ספרות" inputmode="numeric" maxlength="8"/>
@@ -843,9 +834,6 @@ function selectItem(sku, itemObj) {
   currentItem = itemObj || items.find(i=>i.sku===sku); if(!currentItem) return;
   const batchBadge = (currentItem.batchManaged ? ' <span class="badge" style="background:#fff3cd;color:#8a6500">📦 מנוהל אצווה</span>' : '')
     + (currentItem.exception ? ' <span class="badge" style="background:#c00;color:#fff">⚠ חריג — פריט לא מוכר</span>' : '');
-  document.getElementById('exc-unit-wrap').style.display = currentItem.exception ? 'block' : 'none';
-  document.getElementById('exc-unit-select').value = '';
-  document.getElementById('exc-unit-error').style.display = 'none';
   document.getElementById('batch-input').maxLength = currentItem.exception ? 9 : 8;
   document.getElementById('selected-item-info').innerHTML=`<div class="item-name" style="font-size:16px;margin-bottom:4px">${currentItem.name}</div><div class="item-sku" style="margin-bottom:8px">מק"ט: ${currentItem.sku}</div><span class="badge ${isKg(currentItem.unit)?'badge-kg':'badge-unit'}">${currentItem.unit}</span>${batchBadge}`;
   document.getElementById('qty-unit-label').textContent=currentItem.unit;
@@ -908,12 +896,7 @@ function addEntry(stayOnItem){
   const qty=parseFloat(document.getElementById('qty-input').value);
   if(isNaN(qty)||qty<0){alert('יש להזין כמות תקינה');return;}
 
-  let unit = currentItem.unit;
-  if (currentItem.exception) {
-    unit = document.getElementById('exc-unit-select').value;
-    if (!unit) { document.getElementById('exc-unit-error').style.display = 'block'; return; }
-    document.getElementById('exc-unit-error').style.display = 'none';
-  }
+  const unit = currentItem.unit;
 
   let batchNumber = '';
   if (currentItem.batchManaged) {
@@ -1612,10 +1595,10 @@ function canReceiveAsException(parsed) {
 }
 function receiveAsException(sku, batch, qty) {
   closeScanner();
-  selectItem(sku, { sku, name: 'פריט לא מוכר (חריג)', unit: '', batchManaged: true, exception: true });
+  selectItem(sku, { sku, name: 'פריט לא מוכר (חריג)', unit: 'ק"ג', batchManaged: true, exception: true });
   document.getElementById('batch-input').value = batch;
   if (qty !== null && qty !== undefined && qty !== '') document.getElementById('qty-input').value = qty;
-  showToast('⚠ קליטה כחריג — בחר יחידה והזן כמות');
+  showToast('⚠ קליטה כחריג — הזן כמות בק"ג');
 }
 
 function closeScanner() {
