@@ -834,7 +834,7 @@ function selectItem(sku, itemObj) {
   currentItem = itemObj || items.find(i=>i.sku===sku); if(!currentItem) return;
   const batchBadge = (currentItem.batchManaged ? ' <span class="badge" style="background:#fff3cd;color:#8a6500">📦 מנוהל אצווה</span>' : '')
     + (currentItem.exception ? ' <span class="badge" style="background:#c00;color:#fff">⚠ חריג — פריט לא מוכר</span>' : '');
-  document.getElementById('batch-input').maxLength = currentItem.exception ? 9 : 8;
+  document.getElementById('batch-input').maxLength = 8;
   document.getElementById('selected-item-info').innerHTML=`<div class="item-name" style="font-size:16px;margin-bottom:4px">${currentItem.name}</div><div class="item-sku" style="margin-bottom:8px">מק"ט: ${currentItem.sku}</div><span class="badge ${isKg(currentItem.unit)?'badge-kg':'badge-unit'}">${currentItem.unit}</span>${batchBadge}`;
   document.getElementById('qty-unit-label').textContent=currentItem.unit;
   document.getElementById('qty-input').value='';
@@ -904,7 +904,7 @@ function addEntry(stayOnItem){
     const batchErr = document.getElementById('batch-error');
     const batchOk = currentItem.exception ? EXC_BATCH_RE.test(batchNumber) : /^[0-9]{1,8}$/.test(batchNumber);
     if (!batchOk) {
-      batchErr.textContent = currentItem.exception ? 'בחריג, מספר האצווה חייב להיות 8 או 9 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+      batchErr.textContent = currentItem.exception ? 'בחריג, מספר האצווה חייב להיות 8 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
       batchErr.style.display = 'block';
       document.getElementById('batch-input').focus();
       return;
@@ -954,7 +954,7 @@ function openEditModal(id){
   const isBatch = itemDef ? itemDef.batchManaged : !!e.batchNumber;
   document.getElementById('edit-batch-wrap').style.display = isBatch ? 'block' : 'none';
   document.getElementById('edit-batch').value = e.batchNumber || '';
-  document.getElementById('edit-batch').maxLength = e.exception ? 9 : 8;
+  document.getElementById('edit-batch').maxLength = 8;
   document.getElementById('edit-batch-error').style.display = 'none';
   // איפוס המחשבון בכל פתיחת מודל
   editCalcReset();
@@ -973,7 +973,7 @@ function confirmEdit(){
     const err = document.getElementById('edit-batch-error');
     const isExc = !!wh().entries[idx].exception;
     if (isExc ? !EXC_BATCH_RE.test(batchNumber) : !/^[0-9]{1,8}$/.test(batchNumber)) {
-      err.textContent = isExc ? 'בחריג, מספר האצווה חייב להיות 8 או 9 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+      err.textContent = isExc ? 'בחריג, מספר האצווה חייב להיות 8 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
       err.style.display = 'block';
       return;
     }
@@ -1587,9 +1587,9 @@ function submitManualScan() {
   try { onScanSuccess(v); } finally { scanFromManual = false; }
 }
 
-// חריג: מק"ט באורך 5 או 7 ספרות, אצווה באורך 8 או 9 ספרות
+// חריג: מק"ט באורך 5 או 7 ספרות, אצווה באורך 8 ספרות
 const EXC_SKU_RE = /^(\d{5}|\d{7})$/;
-const EXC_BATCH_RE = /^\d{8,9}$/;
+const EXC_BATCH_RE = /^\d{8}$/;
 function canReceiveAsException(parsed) {
   return !scanFromManual && EXC_SKU_RE.test(parsed.sku) && EXC_BATCH_RE.test(parsed.batch);
 }
