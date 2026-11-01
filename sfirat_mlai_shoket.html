@@ -87,7 +87,8 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
 .scanner-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #111; color: #fff; }
 .scanner-header h2 { color: #fff; font-size: 16px; margin: 0; }
 .scanner-close { background: none; border: none; color: #fff; font-size: 26px; cursor: pointer; line-height: 1; padding: 0 6px; }
-#qr-reader-wrap { flex: 1; position: relative; background: #000; }
+#qr-reader-wrap { flex: 1; min-height: 0; overflow: hidden; position: relative; background: #000; }
+#scan-error-area { position: absolute; top: 56px; left: 0; right: 0; z-index: 960; }
 #qr-reader { width: 100%; height: 100%; }
 .scanner-footer { padding: 14px 16px; background: #111; text-align: center; }
 .scanner-hint { color: #ddd; font-size: 13px; margin-bottom: 8px; }
@@ -261,7 +262,11 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
   </div>
   <div id="scan-error-area"></div>
   <div class="scanner-footer">
-    <div class="scanner-hint">מקם את הברקוד במרכז המסך</div>
+    <div class="scanner-hint">מקם את הברקוד במרכז המסך, במרחק 10–15 ס"מ</div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <input type="text" id="scan-manual-input" placeholder='או הקלד: מק"ט-אצווה' dir="ltr" style="flex:1;margin:0;padding:9px 10px;font-size:14px;background:#222;color:#fff;border:1px solid #555;border-radius:8px"/>
+      <button class="scanner-manual-btn" onclick="submitManualScan()">אישור</button>
+    </div>
   </div>
 </div>
 
@@ -270,7 +275,7 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
   <!-- ══════════ מסך בחירת מחסן ══════════ -->
   <div class="screen active" id="screen-home">
     <div style="padding: 10px 0 20px">
-      <h1>ספירת מלאי</h1>
+      <h1>ספירת מלאי <span style="font-size:11px;font-weight:400;color:#bbb">גרסה 01.11.26-ב</span></h1>
       <p class="sub">בחר מחסן פעיל או פתח מחסן חדש</p>
     </div>
 
@@ -1505,8 +1510,22 @@ function openScanner(mode) {
     return;
   }
 
-  html5QrCode = new Html5Qrcode('qr-reader');
-  const config = { fps: 10, qrbox: { width: 260, height: 160 }, aspectRatio: 1.5 };
+  const F = Html5QrcodeSupportedFormats;
+  html5QrCode = new Html5Qrcode('qr-reader', {
+    verbose: false,
+    // זיהוי ממוקד בפורמטים הרלוונטיים — מהיר ואמין יותר מסריקת כל הפורמטים
+    formatsToSupport: [F.QR_CODE, F.CODE_39, F.CODE_128, F.EAN_13, F.EAN_8, F.DATA_MATRIX],
+    // שימוש בזיהוי המובנה של הדפדפן (אנדרואיד/כרום) כשקיים — מזהה ברקודים קטנים הרבה יותר טוב
+    useBarCodeDetectorIfSupported: true,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
+  const config = {
+    fps: 15,
+    // אזור סריקה גדול: 75% מרוחב התצוגה, ריבועי כדי ש-QR ייכנס בשלמותו
+    qrbox: (w, h) => { const size = Math.max(150, Math.floor(Math.min(w, h) * 0.75)); return { width: size, height: size }; },
+    videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+  };
+  document.getElementById('scan-manual-input').value = '';
 
   html5QrCode.start(
     { facingMode: 'environment' },
@@ -1525,6 +1544,14 @@ function openScanner(mode) {
     }
     showScanError('לא ניתן לפתוח מצלמה', detail);
   });
+}
+
+function submitManualScan() {
+  const v = document.getElementById('scan-manual-input').value.trim();
+  if (!v) return;
+  document.getElementById('scan-error-area').innerHTML = '';
+  scannerBusy = false;
+  onScanSuccess(v);
 }
 
 function closeScanner() {
