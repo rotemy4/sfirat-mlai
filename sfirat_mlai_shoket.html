@@ -398,6 +398,7 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
         <button class="primary" style="flex:1;margin-top:0" onclick="addEntry(false)">✓ אשר ספירה</button>
         <button class="primary" style="flex:1;margin-top:0;background:#1a5276" onclick="addEntry(true)" title="שמור וספור שוב את אותו פריט">✓ + ספור שוב</button>
       </div>
+      <button class="primary" id="finish-item-btn" style="display:none;background:#fff;color:#555;border:1px solid #ccc" onclick="finishItemWithoutCount()" title="חזרה לרשימת הפריטים בלי להוסיף ספירה">✕ סיים בלי ספירה נוספת</button>
     </div>
     <div id="item-prev-entries" style="display:none">
       <p style="font-size:13px;font-weight:600;color:#888;margin-bottom:8px">ספירות קודמות לפריט זה</p>
@@ -843,9 +844,16 @@ function selectItem(sku) {
 function renderPrevEntries(sku){
   const prev=whEntries().filter(e=>e.sku===sku);
   const el=document.getElementById('item-prev-entries');
+  document.getElementById('finish-item-btn').style.display = prev.length ? 'block' : 'none';
   if(!prev.length){el.style.display='none';return;}
   el.style.display='block';
   document.getElementById('prev-entries-list').innerHTML=[...prev].reverse().map(e=>buildEntryRow(e,'item')).join('');
+}
+function finishItemWithoutCount(){
+  const typed=document.getElementById('qty-input').value.trim();
+  if(typed && !confirm('הוזנה כמות שלא נשמרה. לסיים בלי לשמור אותה?')) return;
+  showScreen('screen-count');
+  renderItems(document.getElementById('item-search').value||'');
 }
 
 // ══════════════════════════════════════════════════
