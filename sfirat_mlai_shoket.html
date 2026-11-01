@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ספירת מלאי</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx-js-style: SheetJS 0.18.5 + תמיכה בעיצוב תאים (לסימון חריגים באדום) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -275,7 +276,7 @@ button.danger { width: 100%; background: #fff; color: #c00; border: 1px solid #f
   <!-- ══════════ מסך בחירת מחסן ══════════ -->
   <div class="screen active" id="screen-home">
     <div style="padding: 10px 0 20px">
-      <h1>ספירת מלאי <span style="font-size:11px;font-weight:400;color:#bbb">גרסה 01.11.26-ב</span></h1>
+      <h1>ספירת מלאי <span style="font-size:11px;font-weight:400;color:#bbb">גרסה 01.11.26-ג</span></h1>
       <p class="sub">בחר מחסן פעיל או פתח מחסן חדש</p>
     </div>
 
@@ -829,9 +830,11 @@ function renderItems(query) {
 }
 function filterItems(){renderItems(document.getElementById('item-search').value);}
 
-function selectItem(sku) {
-  currentItem = items.find(i=>i.sku===sku); if(!currentItem) return;
-  const batchBadge = currentItem.batchManaged ? ' <span class="badge" style="background:#fff3cd;color:#8a6500">📦 מנוהל אצווה</span>' : '';
+function selectItem(sku, itemObj) {
+  currentItem = itemObj || items.find(i=>i.sku===sku); if(!currentItem) return;
+  const batchBadge = (currentItem.batchManaged ? ' <span class="badge" style="background:#fff3cd;color:#8a6500">📦 מנוהל אצווה</span>' : '')
+    + (currentItem.exception ? ' <span class="badge" style="background:#c00;color:#fff">⚠ חריג — פריט לא מוכר</span>' : '');
+  document.getElementById('batch-input').maxLength = 8;
   document.getElementById('selected-item-info').innerHTML=`<div class="item-name" style="font-size:16px;margin-bottom:4px">${currentItem.name}</div><div class="item-sku" style="margin-bottom:8px">מק"ט: ${currentItem.sku}</div><span class="badge ${isKg(currentItem.unit)?'badge-kg':'badge-unit'}">${currentItem.unit}</span>${batchBadge}`;
   document.getElementById('qty-unit-label').textContent=currentItem.unit;
   document.getElementById('qty-input').value='';
@@ -866,7 +869,8 @@ function finishItemWithoutCount(){
 // ══════════════════════════════════════════════════
 function buildEntryRow(e, ctx) {
   const cb = e.checked?'<span class="checked-badge" style="margin-top:2px;display:inline-block">✓ נבדק</span>':'';
-  const batchTag = e.batchNumber ? `<div style="font-size:12px;color:#8a6500;margin-top:2px">📦 אצווה: ${e.batchNumber}</div>` : '';
+  const batchTag = (e.exception ? `<div style="margin-top:2px"><span class="badge" style="background:#c00;color:#fff">⚠ חריג</span></div>` : '')
+    + (e.batchNumber ? `<div style="font-size:12px;color:#8a6500;margin-top:2px">📦 אצווה: ${e.batchNumber}</div>` : '');
   return `<div class="history-entry ${e.checked?'checked-row':''}" id="er-${e.id}">
     <div class="history-main">
       ${ctx==='history'?`<div class="history-name">${e.name}</div><div class="history-sku">מק"ט: ${e.sku}</div>`:''}
@@ -892,12 +896,15 @@ function addEntry(stayOnItem){
   const qty=parseFloat(document.getElementById('qty-input').value);
   if(isNaN(qty)||qty<0){alert('יש להזין כמות תקינה');return;}
 
+  const unit = currentItem.unit;
+
   let batchNumber = '';
   if (currentItem.batchManaged) {
     batchNumber = document.getElementById('batch-input').value.trim();
     const batchErr = document.getElementById('batch-error');
-    if (!/^[0-9]{1,8}$/.test(batchNumber)) {
-      batchErr.textContent = 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+    const batchOk = currentItem.exception ? EXC_BATCH_RE.test(batchNumber) : /^[0-9]{1,8}$/.test(batchNumber);
+    if (!batchOk) {
+      batchErr.textContent = currentItem.exception ? 'בחריג, מספר האצווה חייב להיות 8 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
       batchErr.style.display = 'block';
       document.getElementById('batch-input').focus();
       return;
@@ -907,7 +914,8 @@ function addEntry(stayOnItem){
 
   const now=new Date();
   wh().entries.push({
-    id:Date.now().toString(), sku:currentItem.sku, name:currentItem.name, unit:currentItem.unit, qty,
+    id:Date.now().toString(), sku:currentItem.sku, name:currentItem.name, unit, qty,
+    exception: !!currentItem.exception,
     batchNumber: batchNumber,
     note:document.getElementById('note-input').value.trim(),
     time:now.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),
@@ -946,6 +954,7 @@ function openEditModal(id){
   const isBatch = itemDef ? itemDef.batchManaged : !!e.batchNumber;
   document.getElementById('edit-batch-wrap').style.display = isBatch ? 'block' : 'none';
   document.getElementById('edit-batch').value = e.batchNumber || '';
+  document.getElementById('edit-batch').maxLength = 8;
   document.getElementById('edit-batch-error').style.display = 'none';
   // איפוס המחשבון בכל פתיחת מודל
   editCalcReset();
@@ -962,8 +971,9 @@ function confirmEdit(){
   if (batchVisible) {
     batchNumber = document.getElementById('edit-batch').value.trim();
     const err = document.getElementById('edit-batch-error');
-    if (!/^[0-9]{1,8}$/.test(batchNumber)) {
-      err.textContent = 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
+    const isExc = !!wh().entries[idx].exception;
+    if (isExc ? !EXC_BATCH_RE.test(batchNumber) : !/^[0-9]{1,8}$/.test(batchNumber)) {
+      err.textContent = isExc ? 'בחריג, מספר האצווה חייב להיות 8 ספרות' : 'יש להזין מספר אצווה בין 1 ל-8 ספרות';
       err.style.display = 'block';
       return;
     }
@@ -1057,7 +1067,7 @@ function buildReviewRow(e){
   return `<div class="review-entry-row ${e.checked?'is-checked':''}" id="rer-${e.id}">
     <input type="checkbox" class="review-checkbox" ${e.checked?'checked':''} onchange="toggleCheck('${e.id}',this.checked)"/>
     <div class="review-entry-info">
-      <div class="review-entry-qty">${e.qty} ${e.unit}${e.batchNumber?' · 📦 '+e.batchNumber:''}</div>
+      <div class="review-entry-qty">${e.exception?'<span class="badge" style="background:#c00;color:#fff">⚠ חריג</span> ':''}${e.qty} ${e.unit}${e.batchNumber?' · 📦 '+e.batchNumber:''}</div>
       <div class="review-entry-detail">${e.note?'📍 '+e.note+' · ':''}${e.date} ${e.time}${e.counter?' · '+e.counter:''}</div>
     </div>
     <div style="display:flex;gap:5px;flex-shrink:0">
@@ -1136,14 +1146,28 @@ function loadUnitCode(unit) {
   return 'שגיאה';
 }
 
+// סימון שורות באדום (רקע אדום בהיר + טקסט אדום כהה) — דורש xlsx-js-style
+function markRowsRed(ws, rowIdxs, nCols) {
+  const style = { fill: { patternType: 'solid', fgColor: { rgb: 'FFC7CE' } }, font: { color: { rgb: '9C0006' }, bold: true } };
+  rowIdxs.forEach(r => {
+    for (let c = 0; c < nCols; c++) {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+      ws[ref].s = style;
+    }
+  });
+}
+
 function buildWorkbook(warehouseList) {
   const wb = XLSX.utils.book_new();
   warehouseList.forEach(w => {
     if (!w.entries.length) return;
-    const ws1Data = [['מחסן','מק"ט','תיאור','כמות','יחידה','מספר אצווה','הערה','תאריך','שעה','סופר','נבדק']];
-    w.entries.forEach(e => ws1Data.push([w.name,e.sku,e.name,e.qty,e.unit,e.batchNumber||'',e.note||'',e.date,e.time,e.counter||'',e.checked?'✓':'']));
+    const ws1Data = [['מחסן','מק"ט','תיאור','כמות','יחידה','מספר אצווה','הערה','תאריך','שעה','סופר','נבדק','חריג']];
+    const ws1Exc = [];
+    w.entries.forEach(e => { if (e.exception) ws1Exc.push(ws1Data.length); ws1Data.push([w.name,e.sku,e.name,e.qty,e.unit,e.batchNumber||'',e.note||'',e.date,e.time,e.counter||'',e.checked?'✓':'',e.exception?'חריג':'']); });
     const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
-    ws1['!cols']=[14,12,28,10,8,14,20,12,8,14,8].map(x=>({wch:x}));
+    ws1['!cols']=[14,12,28,10,8,14,20,12,8,14,8,8].map(x=>({wch:x}));
+    markRowsRed(ws1, ws1Exc, ws1Data[0].length);
     const sheetName = w.name.substring(0,28).replace(/[:\\\/\?\*\[\]]/g,'_');
     XLSX.utils.book_append_sheet(wb, ws1, sheetName + ' - ספירות');
 
@@ -1176,6 +1200,13 @@ function buildWorkbook(warehouseList) {
       }
     });
     const ws2=XLSX.utils.aoa_to_sheet(ws2Data);
+    // שורת סיכום מסומנת באדום אם יש בה ספירת חריג (לפי מק"ט, ולפי אצווה כשקיימת)
+    const ws2Exc = [];
+    ws2Data.forEach((row, r) => {
+      if (r === 0) return;
+      if (w.entries.some(e => e.exception && e.sku === row[1] && (!row[3] || (e.batchNumber||'') === row[3]))) ws2Exc.push(r);
+    });
+    markRowsRed(ws2, ws2Exc, ws2Data[0].length);
     ws2['!cols']=[14,12,28,12,12,8,14,8,14,...(sheetHasBatch?[14]:[]),12,12].map(x=>({wch:x}));
     XLSX.utils.book_append_sheet(wb, ws2, sheetName + ' - סיכום');
   });
@@ -1546,12 +1577,28 @@ function openScanner(mode) {
   });
 }
 
+let scanFromManual = false; // "קליטה כחריג" מותרת רק בסריקת מצלמה, לא בהקלדה ידנית
 function submitManualScan() {
   const v = document.getElementById('scan-manual-input').value.trim();
   if (!v) return;
   document.getElementById('scan-error-area').innerHTML = '';
   scannerBusy = false;
-  onScanSuccess(v);
+  scanFromManual = true;
+  try { onScanSuccess(v); } finally { scanFromManual = false; }
+}
+
+// חריג: מק"ט באורך 5 או 7 ספרות, אצווה באורך 8 ספרות
+const EXC_SKU_RE = /^(\d{5}|\d{7})$/;
+const EXC_BATCH_RE = /^\d{8}$/;
+function canReceiveAsException(parsed) {
+  return !scanFromManual && EXC_SKU_RE.test(parsed.sku) && EXC_BATCH_RE.test(parsed.batch);
+}
+function receiveAsException(sku, batch, qty) {
+  closeScanner();
+  selectItem(sku, { sku, name: 'פריט לא מוכר (חריג)', unit: 'ק"ג', batchManaged: true, exception: true });
+  document.getElementById('batch-input').value = batch;
+  if (qty !== null && qty !== undefined && qty !== '') document.getElementById('qty-input').value = qty;
+  showToast('⚠ קליטה כחריג — הזן כמות בק"ג');
 }
 
 function closeScanner() {
@@ -1634,8 +1681,16 @@ function flashSuccess(cb) {
 function handleScanForSearch(parsed) {
   const item = items.find(i => sameSku(i.sku, parsed.sku));
   if (!item) {
-    showScanError('מק"ט לא נמצא', 'מק"ט ' + parsed.sku + ' אינו קיים ברשימת הפריטים.');
+    showScanError('מק"ט לא נמצא', 'מק"ט ' + escHtml(parsed.sku) + ' אינו קיים ברשימת הפריטים.');
     showRetryButton();
+    if (canReceiveAsException(parsed)) {
+      const box = document.querySelector('#scan-error-area .scan-error-box');
+      const btn = document.createElement('button');
+      btn.style.cssText = 'display:block;width:100%;margin-top:10px;background:#c00;color:#fff;border:none;border-radius:8px;padding:11px;font-size:15px;font-weight:700;cursor:pointer';
+      btn.textContent = '⚠ קליטה כחריג';
+      btn.onclick = () => receiveAsException(parsed.sku, parsed.batch, parsed.qty);
+      box.appendChild(btn);
+    }
     return;
   }
   // בדיקה שהפריט שייך למחסן הנוכחי (אם יש שיוכים)
