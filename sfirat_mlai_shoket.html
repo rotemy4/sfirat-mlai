@@ -1103,6 +1103,14 @@ function showSummary(){
 // ══════════════════════════════════════════════════
 // ייצוא
 // ══════════════════════════════════════════════════
+// קוד יחידה לטעינה: ק"ג → 6, יחידה → 1, אחרת "שגיאה"
+function loadUnitCode(unit) {
+  const u = String(unit||'').trim().toLowerCase().replace(/["'״׳.\s]/g,'');
+  if (['קג','קילו','קילוגרם','kg'].includes(u)) return 6;
+  if (['יח','יחידה','יחידות','unit','units','pcs','ea'].includes(u)) return 1;
+  return 'שגיאה';
+}
+
 function buildWorkbook(warehouseList) {
   const wb = XLSX.utils.book_new();
   warehouseList.forEach(w => {
@@ -1115,7 +1123,15 @@ function buildWorkbook(warehouseList) {
     XLSX.utils.book_append_sheet(wb, ws1, sheetName + ' - ספירות');
 
     // ── גיליון סיכום — פריטים רגילים לפי מק"ט, מנוהלי אצווה לפי מק"ט+אצווה ──
-    const ws2Data=[['מחסן','מק"ט','תיאור','מספר אצווה','סה"כ','יחידה','מס׳ ספירות','נבדקו']];
+    // עמודות טעינה (אחרי "נבדקו"): מק"ט לטעינה, [אצווה לטעינה], יחידה לטעינה, כמות לטעינה
+    const sheetHasBatch = w.entries.some(e=>e.batchNumber);
+    const loadHeaders = sheetHasBatch
+      ? ['מק"ט לטעינה','אצווה לטעינה','יחידה לטעינה','כמות לטעינה']
+      : ['מק"ט לטעינה','יחידה לטעינה','כמות לטעינה'];
+    const loadCols = (sku, batch, unit, total) => sheetHasBatch
+      ? [sku, batch, loadUnitCode(unit), total]
+      : [sku, loadUnitCode(unit), total];
+    const ws2Data=[['מחסן','מק"ט','תיאור','מספר אצווה','סה"כ','יחידה','מס׳ ספירות','נבדקו', ...loadHeaders]];
     const skus=[...new Set(w.entries.map(e=>e.sku))];
     skus.forEach(sku => {
       const skuEntries = w.entries.filter(e=>e.sku===sku);
@@ -1125,17 +1141,17 @@ function buildWorkbook(warehouseList) {
         const batches = [...new Set(skuEntries.map(e=>e.batchNumber||''))];
         batches.forEach(batch => {
           const be = skuEntries.filter(e=>(e.batchNumber||'')===batch);
-          const total = be.reduce((s,e)=>s+e.qty,0);
-          ws2Data.push([w.name, sku, be[0].name, batch, parseFloat(total.toFixed(3)), be[0].unit, be.length, be.filter(e=>e.checked).length]);
+          const total = parseFloat(be.reduce((s,e)=>s+e.qty,0).toFixed(3));
+          ws2Data.push([w.name, sku, be[0].name, batch, total, be[0].unit, be.length, be.filter(e=>e.checked).length, ...loadCols(sku, batch, be[0].unit, total)]);
         });
       } else {
         // סיכום רגיל לפי מק"ט
-        const total = skuEntries.reduce((s,e)=>s+e.qty,0);
-        ws2Data.push([w.name, sku, skuEntries[0].name, '', parseFloat(total.toFixed(3)), skuEntries[0].unit, skuEntries.length, skuEntries.filter(e=>e.checked).length]);
+        const total = parseFloat(skuEntries.reduce((s,e)=>s+e.qty,0).toFixed(3));
+        ws2Data.push([w.name, sku, skuEntries[0].name, '', total, skuEntries[0].unit, skuEntries.length, skuEntries.filter(e=>e.checked).length, ...loadCols(sku, '', skuEntries[0].unit, total)]);
       }
     });
     const ws2=XLSX.utils.aoa_to_sheet(ws2Data);
-    ws2['!cols']=[14,12,28,12,12,8,14,8].map(x=>({wch:x}));
+    ws2['!cols']=[14,12,28,12,12,8,14,8,14,...(sheetHasBatch?[14]:[]),12,12].map(x=>({wch:x}));
     XLSX.utils.book_append_sheet(wb, ws2, sheetName + ' - סיכום');
   });
   return wb;
